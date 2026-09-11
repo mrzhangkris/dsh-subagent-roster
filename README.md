@@ -210,6 +210,29 @@ profiles:
 
 Use an explicit profile flag: `/agent-teams --profile demo-delivery implement the feature`. The first ordinary token is never treated as an implicit profile. Normal command runs call `agent_teams_create({ profile, approval: "required" })`: the roster and seed/Captain-designed DAG remain staged, no child session is created, and no task is claimed. Edit the plan in the activity panel using the host model catalog, return to chat so the Captain asks what to revise and then atomically updates the same draft, discard it, or click **Approve & Run**. Return/discard actions cancel any planning turn still running; discard also parks model-facing context that forbids silently creating a replacement team. Approval resolves the final provider/model/reasoning choices, atomically spawns the roster, and starts only ready tasks. A running team is stopped from its own panel header through a confirmation dialog rather than from the composer. Direct tool clients may pass `approval: "automatic"` for the legacy immediate path. Failed review/test tasks do not unlock downstream work; automatic repair/review tasks do not depend on the failed review.
 
+## Named subagent roster (settings card)
+
+Beyond the team workflow, the plugin maintains a **named subagent roster**: durable, user-authored roles that a captain session dispatches through the `roster_agent` tool (`roster_list` shows the enabled directory; the dynamic system-prompt section lists the same roles every request). Maintain the roster in **Settings → Plugins → 子智能体花名册** — changes commit live to the `subagent-roster` settings namespace and are visible to the next dispatch without a restart.
+
+Field meanings:
+
+| Field | Meaning |
+| --- | --- |
+| `name` | Unique key; `roster_agent` addresses the role by this name. Renaming an existing role asks for confirmation — later dispatches must use the new name. |
+| `icon` | Single emoji shown next to the role wherever it renders (section, tool directory, settings card). Optional. |
+| `description` | One-line summary (≤ 100 chars) the captain reads when deciding whom to dispatch. |
+| `persona` | The role's system prompt (≤ 20000 chars), injected into every member spawned for the role. |
+| `modelPolicy` | `inherit` (the captain's route, default), `fixed` (explicit provider + model), or `auto` (try the roster-level auto chain in order). |
+| `reasoningEffort` | Free-text passthrough to the model adapter — verbatim, unvalidated; empty uses the provider default. |
+| `maxTokens` / `maxDepth` | Optional response token cap; delegation depth cap (default `3`). |
+| `toolFilter` | Tool gate for members of the role — `deny` or `allow` list, never both. Names are NOT validated against the live tool surface (they are matched at dispatch time); **roles intended to be dispatched by members (second-level delegation) should configure a toolFilter to narrow the tool surface**. |
+| `backgroundMode` | `continuable` (durable member, default) or `one-shot` (foreground by default, background with `run_in_background`). |
+| `enabled` | Disabled roles stay in the list but are skipped by dispatch and the prompt section. |
+
+The **auto chain** is roster-level: for `auto`-policy roles the plugin resolves candidates in order (order is priority) and the first resolvable route wins; when every candidate fails, the role's `fallback` decides — `error` (default) refuses the dispatch, `inherit` falls back to the captain's model with a visible warning note on the result.
+
+Import/export: **Export** downloads the current roster as `subagent-roster.json`; **Import** validates the WHOLE document first and replaces atomically (all-or-nothing) — a file with any invalid role is rejected with per-field located errors, and a file written by a newer schema (`schemaVersion > 1`) refuses with a read-only upgrade message. Saves are revision-fenced: if another window changed the roster while you edited, the write is refused with 「名单已被其他窗口修改，请刷新后重做（本次改动将丢弃）」 instead of silently overwriting.
+
 ## License
 
 [MIT](./LICENSE)

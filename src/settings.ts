@@ -150,10 +150,24 @@ export function registerRosterSettings(ctx: Context, config: Config): void {
   ctx.inject(['settings'], (settingsCtx) => {
     const provider = (settingsCtx as { settings?: RosterSettingsProvider }).settings
     if (provider === undefined) return
-    provider.installSection(ctx, ROSTER_NS, RosterSettingsSchema, entry, {
-      validate,
-      setSource,
-      onChange,
-    })
+    try {
+      provider.installSection(ctx, ROSTER_NS, RosterSettingsSchema, entry, {
+        validate,
+        setSource,
+        onChange,
+      })
+    } catch (error) {
+      // Task 9 D1 (Task 3 review Important): installSection reads the STORED
+      // section and throws when it cannot resolve — a legacy corrupt document
+      // used to take the whole plugin down ("not loaded" instead of the
+      // designed read-only degrade). Log the exact cause and fall back to the
+      // composition entry (the all-defaults roster): the plugin stays alive,
+      // the user sees an empty roster, and nothing is written to storage.
+      const logger = (ctx as { logger?: { warn?: (message: string) => void } }).logger
+      logger?.warn?.(
+        `subagent-roster: installSection failed (${String(error)}) — falling back to the default roster entry; `
+        + `the stored "${ROSTER_NS}" section is left untouched`,
+      )
+    }
   })
 }

@@ -1,0 +1,343 @@
+/* RosterCard: the plugin's settings.plugin.item card (Settings → Plugins).
+   The slot dispatches inside a <ul>, so the root is an <li>. All surfaces
+   follow DSH design tokens (dsw alias variables), mirroring the fork's other
+   client surfaces. */
+
+.root {
+  display: block;
+  padding: 16px;
+  border: 1px solid var(--dsw-alias-border-l2, rgba(148, 163, 184, 0.25));
+  border-radius: 12px;
+  background: var(--dsw-alias-bg-layer-1, transparent);
+  list-style: none;
+  color: var(--dsw-alias-label-primary, inherit);
+}
+
+.head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.count {
+  font-size: 12px;
+  color: var(--dsw-alias-label-secondary, inherit);
+}
+
+.subtitle {
+  margin: 0 0 12px;
+  font-size: 12px;
+  color: var(--dsw-alias-label-tertiary, inherit);
+}
+
+.notice {
+  margin: 8px 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  border: 1px solid var(--dsw-alias-border-l3, transparent);
+  color: var(--dsw-alias-label-secondary, inherit);
+}
+
+.notice[data-tone='error'] {
+  border-color: var(--dsw-alias-state-error-primary, currentColor);
+}
+
+.notice ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+button {
+  font: inherit;
+  font-size: 12px;
+  padding: 4px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--dsw-alias-border-l2, transparent);
+  background: var(--dsw-alias-interactive-bg-hover, transparent);
+  color: inherit;
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  border-color: var(--dsw-alias-border-l3, currentColor);
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+button[data-danger] {
+  color: var(--dsw-alias-state-error-primary, inherit);
+}
+
+button[data-primary] {
+  background: var(--dsw-alias-state-business-primary, var(--dsw-alias-label-primary, field));
+  color: var(--dsw-alias-label-primary-inverted, var(--dsw-alias-bg-base, fieldtext));
+  border-color: transparent;
+}
+
+.fileInput {
+  display: none;
+}
+
+.rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--dsw-alias-border-l3, transparent);
+  border-radius: 10px;
+}
+
+.row[data-disabled='true'] {
+  opacity: 0.55;
+}
+
+.icon {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  border-radius: 8px;
+  background: var(--dsw-alias-interactive-bg-hover, transparent);
+}
+
+.identity {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.nameLine {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.name {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.description {
+  font-size: 12px;
+  color: var(--dsw-alias-label-secondary, inherit);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.badges {
+  flex: none;
+  display: inline-flex;
+  gap: 6px;
+}
+
+.badge {
+  font-size: 11px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--dsw-alias-border-l2, transparent);
+  color: var(--dsw-alias-label-secondary, inherit);
+  white-space: nowrap;
+}
+
+.toggle {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--dsw-alias-label-secondary, inherit);
+  border: none;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.toggle input {
+  accent-color: var(--dsw-alias-state-business-primary, currentColor);
+}
+
+.autoChain {
+  margin-top: 12px;
+  border: 1px dashed var(--dsw-alias-border-l2, transparent);
+  border-radius: 10px;
+  padding: 10px;
+}
+
+.autoChainTitle {
+  font-size: 12px;
+  font-weight: 600;
+  margin: 0 0 4px;
+}
+
+.autoChainHint {
+  margin: 0 0 8px;
+  font-size: 11px;
+  color: var(--dsw-alias-label-tertiary, inherit);
+}
+
+.autoChainRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.autoChainRow input {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.chainIndex {
+  flex: none;
+  font-size: 11px;
+  color: var(--dsw-alias-label-tertiary, inherit);
+}
+
+.editor {
+  margin-top: 12px;
+  border: 1px solid var(--dsw-alias-border-l2, transparent);
+  border-radius: 10px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.editorTitle {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.fieldHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.counter {
+  font-size: 11px;
+  color: var(--dsw-alias-label-tertiary, inherit);
+}
+
+.counter[data-over='true'] {
+  color: var(--dsw-alias-state-error-primary, currentColor);
+}
+
+.field input[type='text'],
+.field input[type='number'],
+.field select,
+.field textarea {
+  font: inherit;
+  font-size: 12px;
+  padding: 5px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--dsw-alias-border-l2, currentColor);
+  background: transparent;
+  color: inherit;
+}
+
+.field input[data-invalid='true'],
+.field textarea[data-invalid='true'] {
+  border-color: var(--dsw-alias-state-error-primary, currentColor);
+}
+
+.field textarea {
+  resize: vertical;
+  min-height: 72px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.hint {
+  font-size: 11px;
+  color: var(--dsw-alias-label-tertiary, inherit);
+}
+
+.fieldError {
+  font-size: 11px;
+  color: var(--dsw-alias-state-error-primary, currentColor);
+}
+
+.triRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.triRow label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.formError {
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--dsw-alias-state-error-primary, currentColor);
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+.editorActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.spacer {
+  flex: 1 1 auto;
+}

@@ -337,6 +337,56 @@ describe('roster_agent — fallback notes reach the result (R5)', () => {
     const rendered = renderRosterAgentResult(value)
     expect(rendered).toContain('已回退主模型')
   })
+
+  /** Task 9 D2 (Task 8 Minor 1): the same R5 clause on the two remaining
+   * dispatch branches — continuable and one-shot-background. The foreground
+   * branch above is the end-to-end reference; these pin that the notes ride
+   * EVERY success shape, never just the foreground one. */
+  const EXHAUSTED_AUTO = {
+    schemaVersion: 1,
+    transport: 'spawn',
+    agents: [{
+      name: '自动常驻', description: '自动路由', persona: 'p5',
+      modelPolicy: 'auto', fallback: 'inherit', backgroundMode: 'continuable',
+    }],
+    autoChain: [{ provider: 'bad-a', model: 'm1' }],
+  }
+  const brokenLlm = {
+    resolveCallConfig: vi.fn(async (config: { provider: string }) => {
+      throw new Error(`provider "${config.provider}" is not configured`)
+    }),
+  }
+
+  it('continuable branch: notes ride the started-child result (R5)', async () => {
+    const { dispatch, subagents } = setup(EXHAUSTED_AUTO, { llm: brokenLlm })
+    const value = await dispatch.execute({ agent: '自动常驻', prompt: 'p' }, execOf(PARENT)) as Record<string, unknown>
+    expect(value.dispatched).toBe('continuable')
+    expect((subagents as { startContinuable: ReturnType<typeof vi.fn> }).startContinuable).toHaveBeenCalledTimes(1)
+    const notes = value.notes as string[]
+    expect(Array.isArray(notes)).toBe(true)
+    expect(notes[0]).toContain('已回退主模型')
+    const rendered = renderRosterAgentResult(value)
+    expect(rendered).toContain('已回退主模型')
+    expect(rendered).toContain('childId child-1')
+  })
+
+  it('one-shot-background branch: notes ride the jobId result (R5)', async () => {
+    const jobs = { start: vi.fn(() => 'subagent-9') }
+    const source = {
+      ...EXHAUSTED_AUTO,
+      agents: [{ ...EXHAUSTED_AUTO.agents[0], backgroundMode: 'one-shot' }],
+    }
+    const { dispatch } = setup(source, { llm: brokenLlm, jobs })
+    const value = await dispatch.execute({ agent: '自动常驻', prompt: 'p', run_in_background: true }, execOf(PARENT)) as Record<string, unknown>
+    expect(value.dispatched).toBe('one-shot-background')
+    expect(value.job_id).toBe('subagent-9')
+    const notes = value.notes as string[]
+    expect(Array.isArray(notes)).toBe(true)
+    expect(notes[0]).toContain('已回退主模型')
+    const rendered = renderRosterAgentResult(value)
+    expect(rendered).toContain('已回退主模型')
+    expect(rendered).toContain('jobId subagent-9')
+  })
 })
 
 describe('roster_agent — parent defense', () => {

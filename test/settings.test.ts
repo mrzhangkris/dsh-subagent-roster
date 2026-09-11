@@ -243,3 +243,38 @@ describe('settings validate hook', () => {
     expect(() => registration.hooks.validate?.(resolvedSection({ schemaVersion: 2 }))).toThrow()
   })
 })
+
+describe('registerRosterSettings — broken stored data (Task 9 D1)', () => {
+  /** A host whose provider installSection throws (corrupt stored section). */
+  function makeBrokenHost() {
+    const warns: string[] = []
+    const ctx = {
+      settings: {
+        installSection(): never {
+          throw new Error('stored section is corrupt')
+        },
+      },
+      logger: { warn: (message: string) => { warns.push(message) } },
+      inject(deps: string[], callback: (c: unknown) => void): void {
+        callback(ctx)
+      },
+    }
+    return { ctx, warns }
+  }
+
+  it('does not propagate the installSection throw; the plugin keeps the entry default', () => {
+    const { ctx } = makeBrokenHost()
+    expect(() => registerRosterSettings(ctx as never, {})).not.toThrow()
+    // The fallback truth is the all-defaults roster: the plugin stays alive
+    // with an empty roster instead of failing to load.
+    expect(getRoster()).toEqual({ ok: true, roster: DEFAULT_ROSTER })
+  })
+
+  it('logs a warning naming the namespace so the corruption stays diagnosable', () => {
+    const { ctx, warns } = makeBrokenHost()
+    registerRosterSettings(ctx as never, {})
+    expect(warns).toHaveLength(1)
+    expect(warns[0]).toContain(ROSTER_NS)
+    expect(warns[0]).toContain('stored section is corrupt')
+  })
+})
