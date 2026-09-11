@@ -25,7 +25,9 @@
  *    「auto 链全部不可用，已回退主模型」; an EMPTY chain is exhaustion too
  * 4. capability gate (no silent degradation): each spec knob is checked against
  *    the transport provider support face; a missing one fails with
- *    「角色 X 需要能力 Y，传输后端 Z 不支持」
+ *    「角色 X 需要能力 Y，传输后端 Z 不支持」; a REQUIRED gate with no
+ *    injected capabilities service fails CLOSED (real specs always carry
+ *    knobs, so a missing service must never silently skip the gate)
  * 5. notes passthrough: the inherit-fallback warning reaches the returned value
  *    as a non-empty string array (Task 8 writes it into the tool result)
  */
@@ -37,11 +39,15 @@ import { preflightRoute, type RouteArgs, type RouteDeps } from '../src/route.ts'
 type CallConfigLike = { provider: string; model: string }
 
 /** Build a mock ctx.llm whose resolveCallConfig fails for chosen providers. */
-function mockLlm(failProviders: string[] = []): { resolveCallConfig: ReturnType<typeof vi.fn> } {
+function mockLlm(
+  failProviders: string[] = [],
+  /** Failure message body; overridable to construct over-length summaries. */
+  failMessage = 'is not configured',
+): { resolveCallConfig: ReturnType<typeof vi.fn> } {
   return {
     resolveCallConfig: vi.fn(async (config: CallConfigLike) => {
       if (failProviders.includes(config.provider)) {
-        throw new Error(`provider "${config.provider}" is not configured`)
+        throw new Error(`provider "${config.provider}" ${failMessage}`)
       }
       return { provider: config.provider, model: config.model }
     }),
@@ -54,7 +60,11 @@ interface MockProvider {
   prepareContinuable?: () => Promise<unknown>
 }
 
-/** A realistic in-process provider: every knob true, continuable present. */
+/**
+ * A realistic in-process provider: every knob true, continuable present.
+ * (Both real 0.1.5-rc.1 in-process backends look like this — see the I1
+ * erratum note in the capability-gate describe block.)
+ */
 const FULL: MockProvider = {
   capabilities: { persona: true, agentOptions: true, depthLimit: true, toolFilter: true },
   prepareContinuable: async () => ({}),
@@ -122,8 +132,21 @@ describe('preflightRoute — inherit policy (contract 1)', () => {
     expect(llm.resolveCallConfig).not.toHaveBeenCalled()
   })
 
-  it('is ok even with no llm injected at all (inherit has nothing to resolve)', async () => {
-    const result = await preflightRoute({}, baseArgs(baseSpec()))
+  it('is ok with no llm injected and no knob to gate (empty capabilitiesNeeded)', async () => {
+    const result = await preflightRoute(
+      {},
+      baseArgs(baseSpec({ capabilitiesNeeded: [] })),
+    )
+    expect(result).toEqual({ ok: true })
+  })
+
+  it('is ok with no llm at all when the gate passes on an injected capabilities service', async () => {
+    // inherit has nothing to resolve; the gate still runs (real specs always
+    // carry knobs — roster.ts always pushes 'persona').
+    const result = await preflightRoute(
+      { capabilities: mockCapabilities({ spawn: FULL }) },
+      baseArgs(baseSpec()),
+    )
     expect(result).toEqual({ ok: true })
   })
 })
@@ -131,7 +154,7 @@ describe('preflightRoute — inherit policy (contract 1)', () => {
 describe('preflightRoute — fixed policy (contract 2)', () => {
   it('calls resolveCallConfig once with {provider, model} and returns the resolved route', async () => {
     const llm = mockLlm()
-    const result = await preflightRoute({ llm }, baseArgs(fixedSpec()))
+    const result = await preflightRoute({ llm, capabilities: mockCapabilities({ spawn: FULL }) }, baseArgs(fixedSpec()))
     expect(llm.resolveCallConfig).toHaveBeenCalledTimes(1)
     expect(llm.resolveCallConfig).toHaveBeenCalledWith({ provider: 'deepseek', model: 'deepseek-chat' })
     expect(result).toEqual({ ok: true, resolved: { provider: 'deepseek', model: 'deepseek-chat' } })
@@ -139,7 +162,7 @@ describe('preflightRoute — fixed policy (contract 2)', () => {
 
   it('fails with provider/model and the local-check wording when resolution throws', async () => {
     const llm = mockLlm(['deepseek'])
-    const result = await preflightRoute({ llm }, baseArgs(fixedSpec()))
+    const result = await preflightRoute({ llm, capabilities: mockCapabilities({ spawn: FULL }) }, baseArgs(fixedSpec()))
     expect(result.ok).toBe(false)
     if (result.ok) throw new Error('expected failure')
     expect(result.error).toContain('deepseek-chat')
@@ -148,7 +171,7 @@ describe('preflightRoute — fixed policy (contract 2)', () => {
 
   it('surfaces the thrown reason inside the fixed failure error', async () => {
     const llm = mockLlm(['deepseek'])
-    const result = await preflightRoute({ llm }, baseArgs(fixedSpec()))
+    const result = await preflightRoute({ llm, capabilities: mockCapabilities({ spawn: FULL }) }, baseArgs(fixedSpec()))
     if (result.ok) throw new Error('expected failure')
     expect(result.error).toContain('is not configured')
   })
@@ -157,7 +180,7 @@ describe('preflightRoute — fixed policy (contract 2)', () => {
 describe('preflightRoute — auto chain (contract 3)', () => {
   it('selects the FIRST candidate that resolves and stops calling the chain', async () => {
     const llm = mockLlm()
-    const result = await preflightRoute({ llm }, baseArgs(autoSpec()))
+    const result = await preflightRoute({ llm, capabilities: mockCapabilities({ spawn: FULL }) }, baseArgs(autoSpec()))
     expect(llm.resolveCallConfig).toHaveBeenCalledTimes(1)
     expect(llm.resolveCallConfig).toHaveBeenCalledWith({ provider: 'openai', model: 'gpt-5' })
     expect(result).toEqual({ ok: true, resolved: { provider: 'openai', model: 'gpt-5' } })
@@ -165,7 +188,7 @@ describe('preflightRoute — auto chain (contract 3)', () => {
 
   it('falls through a failing candidate to the next one in order', async () => {
     const llm = mockLlm(['openai'])
-    const result = await preflightRoute({ llm }, baseArgs(autoSpec()))
+    const result = await preflightRoute({ llm, capabilities: mockCapabilities({ spawn: FULL }) }, baseArgs(autoSpec()))
     expect(llm.resolveCallConfig).toHaveBeenCalledTimes(2)
     expect(result).toEqual({ ok: true, resolved: { provider: 'deepseek', model: 'deepseek-chat' } })
   })
@@ -173,7 +196,7 @@ describe('preflightRoute — auto chain (contract 3)', () => {
   it("fails with 「auto 链全部不可用」 plus per-candidate summary when fallback='error'", async () => {
     const llm = mockLlm(['openai', 'deepseek'])
     const result = await preflightRoute(
-      { llm },
+      { llm, capabilities: mockCapabilities({ spawn: FULL }) },
       baseArgs(autoSpec({ fallback: 'error' })),
     )
     expect(result.ok).toBe(false)
@@ -188,7 +211,7 @@ describe('preflightRoute — auto chain (contract 3)', () => {
   it("succeeds with the R5 warning in notes when fallback='inherit'", async () => {
     const llm = mockLlm(['openai', 'deepseek'])
     const result = await preflightRoute(
-      { llm },
+      { llm, capabilities: mockCapabilities({ spawn: FULL }) },
       baseArgs(autoSpec({ fallback: 'inherit' })),
     )
     expect(result.ok).toBe(true)
@@ -203,7 +226,7 @@ describe('preflightRoute — auto chain (contract 3)', () => {
   it('treats an EMPTY autoCandidates chain as exhaustion (fallback error path, zero calls)', async () => {
     const llm = mockLlm()
     const result = await preflightRoute(
-      { llm },
+      { llm, capabilities: mockCapabilities({ spawn: FULL }) },
       baseArgs(autoSpec({ autoCandidates: [], fallback: 'error' })),
     )
     expect(llm.resolveCallConfig).not.toHaveBeenCalled()
@@ -215,13 +238,28 @@ describe('preflightRoute — auto chain (contract 3)', () => {
   it('treats an EMPTY autoCandidates chain as exhaustion (fallback inherit path)', async () => {
     const llm = mockLlm()
     const result = await preflightRoute(
-      { llm },
+      { llm, capabilities: mockCapabilities({ spawn: FULL }) },
       baseArgs(autoSpec({ autoCandidates: [], fallback: 'inherit' })),
     )
     expect(llm.resolveCallConfig).not.toHaveBeenCalled()
     expect(result.ok).toBe(true)
     if (!result.ok) throw new Error('expected success')
     expect(result.notes!.some(note => note.includes(INHERIT_FALLBACK_WORDED))).toBe(true)
+  })
+
+  it('truncates the per-candidate failure summary at 200 chars (roster detail convention)', async () => {
+    const llm = mockLlm(['openai', 'deepseek'], 'x'.repeat(300))
+    const result = await preflightRoute(
+      { llm, capabilities: mockCapabilities({ spawn: FULL }) },
+      baseArgs(autoSpec({ fallback: 'error' })),
+    )
+    expect(result.ok).toBe(false)
+    if (result.ok) throw new Error('expected failure')
+    expect(result.error).toContain('auto 链全部不可用')
+    // The summary segment after the 「——」 separator is capped; the headline prefix stays intact.
+    const summary = result.error.split('——')[1] ?? ''
+    expect(summary.length).toBeGreaterThan(0)
+    expect(summary.length).toBeLessThanOrEqual(200)
   })
 })
 
@@ -231,19 +269,23 @@ describe('preflightRoute — capability gate (contract 4, no silent degradation)
     capabilities: { persona: true, agentOptions: true, depthLimit: true, toolFilter: true },
     prepareContinuable: async () => ({}),
   }
-  /** A realistic in-process spawn provider: all knobs true, NO continuable. */
-  const SPAWN: MockProvider = {
+  // Erratum I1: the REAL spawn-in-process AND fork-in-process providers of
+  // 0.1.5-rc.1 both declare `prepareContinuable()`. The record below is a
+  // HYPOTHETICAL backend (all knobs true, no continuable method) exercising
+  // the gate's no-continuable branch — not a faithful model of the currently
+  // installed backends.
+  const NO_CONTINUABLE: MockProvider = {
     capabilities: { persona: true, agentOptions: true, depthLimit: true, toolFilter: true },
   }
 
-  it("fails listing 「角色 X 需要能力 Y，传输后端 Z 不支持」 when spawn carries a continuable role", async () => {
+  it("fails listing 「角色 X 需要能力 Y，传输后端 Z 不支持」 when the transport cannot apply 'continuable'", async () => {
     const llm = mockLlm()
     const spec = baseSpec({
       backgroundMode: 'continuable',
       capabilitiesNeeded: ['persona', 'continuable'],
     })
     const result = await preflightRoute(
-      { llm, capabilities: mockCapabilities({ spawn: SPAWN }) },
+      { llm, capabilities: mockCapabilities({ spawn: NO_CONTINUABLE }) },
       baseArgs(spec, { transport: 'spawn' }),
     )
     expect(result.ok).toBe(false)
@@ -308,27 +350,31 @@ describe('preflightRoute — capability gate (contract 4, no silent degradation)
     expect(result.error).toContain('fork')
   })
 
-  it('runs the gate BEFORE route resolution — no resolveCallConfig call on a gate failure', async () => {
+  it('runs the gate BEFORE route resolution — a fixed spec with a failing gate never reaches resolveCallConfig', async () => {
+    // A fixed spec ROUTE WOULD resolve (agentOptions carries provider/model);
+    // the gate must reject it first, otherwise this assertion fails.
     const llm = mockLlm()
-    const spec = baseSpec({
-      backgroundMode: 'continuable',
-      capabilitiesNeeded: ['persona', 'continuable'],
-    })
-    await preflightRoute(
-      { llm, capabilities: mockCapabilities({ spawn: SPAWN }) },
-      baseArgs(spec, { transport: 'spawn' }),
+    const gateBlocksFixed: MockProvider = { capabilities: { persona: true, agentOptions: false } }
+    const result = await preflightRoute(
+      { llm, capabilities: mockCapabilities({ spawn: gateBlocksFixed }) },
+      baseArgs(fixedSpec(), { transport: 'spawn' }),
     )
+    expect(result.ok).toBe(false)
+    if (result.ok) throw new Error('expected failure')
+    expect(result.error).toMatch(/需要能力 agentOptions/)
     expect(llm.resolveCallConfig).not.toHaveBeenCalled()
   })
 
-  it('skips the gate when no capabilities service is injected (deps are optional)', async () => {
+  it('fails CLOSED when a gate is required but no capabilities service is injected (no silent gate skip)', async () => {
+    // Real specs always carry knobs (roster.ts always pushes 'persona'), so a
+    // missing capabilities service means the gate CANNOT run — that is a
+    // failure, not a pass (same fail-closed asymmetry as a missing llm).
     const llm = mockLlm()
-    const spec = baseSpec({
-      backgroundMode: 'continuable',
-      capabilitiesNeeded: ['persona', 'continuable'],
-    })
-    const result = await preflightRoute({ llm }, baseArgs(spec, { transport: 'spawn' }))
-    expect(result).toEqual({ ok: true })
+    const result = await preflightRoute({ llm }, baseArgs(baseSpec()))
+    expect(result.ok).toBe(false)
+    if (result.ok) throw new Error('expected failure')
+    expect(result.error).toMatch(/能力(查询面|门控)/)
+    expect(llm.resolveCallConfig).not.toHaveBeenCalled()
   })
 })
 
@@ -336,7 +382,7 @@ describe('preflightRoute — notes passthrough (contract 5)', () => {
   it('delivers a non-empty string-array notes field to the caller on inherit fallback', async () => {
     const llm = mockLlm(['openai', 'deepseek'])
     const result = await preflightRoute(
-      { llm },
+      { llm, capabilities: mockCapabilities({ spawn: FULL }) },
       baseArgs(autoSpec({ fallback: 'inherit' })),
     )
     if (!result.ok) throw new Error('expected success')
@@ -349,7 +395,7 @@ describe('preflightRoute — notes passthrough (contract 5)', () => {
 
   it('does not emit notes on a plain successful route', async () => {
     const llm = mockLlm()
-    const result = await preflightRoute({ llm }, baseArgs(autoSpec()))
+    const result = await preflightRoute({ llm, capabilities: mockCapabilities({ spawn: FULL }) }, baseArgs(autoSpec()))
     if (!result.ok) throw new Error('expected success')
     expect(result.notes).toBeUndefined()
   })
