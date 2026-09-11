@@ -38,6 +38,7 @@ import { collectArchivedTeamsActivity, collectTeamsActivity } from './snapshot.t
 import { findTeamByCaptain } from './state.ts'
 import { formatProfilesForPrompt, type TeamProfileConfig } from './profiles.ts'
 import { installTeamCapabilities } from './capabilities.ts'
+import { registerRosterSettings } from './settings.ts'
 import { TEAM_TOOL_NAMES } from './tool-names.ts'
 
 import { authenticatedWebRoutes, readJsonRequest, RequestBodyError, type BrowserRequestGate, type WebRouteHost } from './web-routes.ts'
@@ -149,6 +150,14 @@ export function apply(ctx: Context, config: Config): void {
   // settled, rather than here.
 
   const agentTeamsRuntime = registerAgentTeamsTools(ctx, resolved)
+
+  // Roster settings namespace (`subagent-roster`) + hot read entry point:
+  // dispatch and the settings card read the roster through getRoster(), which
+  // re-reads the current settings source on every call. Optional seam: the
+  // plugin keeps working (composition-entry roster) when no settings provider
+  // is mounted.
+  registerRosterSettings(ctx, config)
+
   installTeamCapabilities(ctx, {
     stateDir: resolved.stateDir,
     isPendingMember: agentTeamsRuntime.isPendingMember,
