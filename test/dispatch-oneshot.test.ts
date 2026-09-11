@@ -327,6 +327,37 @@ describe('dispatchOneShotBackground — jobs registration (contract 6)', () => {
     expect(outcome).toEqual({ status: 'failed', detail: expect.stringContaining('refusal') })
     expect(outcome.detail).toContain('policy')
   })
+
+  it('settles a clean local cancellation (aborted, no diagnostic) as killed', async () => {
+    // Official runOutcome: stopReason 'aborted' WITHOUT a diagnostic is a
+    // local cancellation — the task ends killed, not failed.
+    const run = fakeRun({ result: Promise.resolve({ output: [], stopReason: 'aborted' }) })
+    const jobs = mockJobs()
+    dispatchOneShotBackground(
+      { subagents: mockSubagents(run), jobs } as unknown as OneShotDeps,
+      baseArgs(),
+    )
+    await expect(firstCall(jobs.start).run().done).resolves.toEqual({ status: 'killed' })
+  })
+
+  it('settles a provider-diagnosed remote abort (aborted + diagnostic) as failed', async () => {
+    // Official runOutcome: 'aborted' WITH a diagnostic is a provider-side
+    // failure — failed, carrying the reason and the diagnostic.
+    const run = fakeRun({ result: Promise.resolve({
+      output: [],
+      stopReason: 'aborted',
+      diagnostic: 'upstream reset',
+    }) })
+    const jobs = mockJobs()
+    dispatchOneShotBackground(
+      { subagents: mockSubagents(run), jobs } as unknown as OneShotDeps,
+      baseArgs(),
+    )
+    const outcome = await firstCall(jobs.start).run().done
+    expect(outcome.status).toBe('failed')
+    expect(outcome.detail).toContain('aborted')
+    expect(outcome.detail).toContain('upstream reset')
+  })
 })
 
 describe('dispatchOneShotBackground — task-owned AbortController (contract 7)', () => {

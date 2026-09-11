@@ -50,14 +50,19 @@
  *   → killed (cancellation must not launder a failed cleanup), otherwise
  *   failed with the error text.
  *
- * Note: the official `@deepseek-ai/dsh-subagent` npm package implements
- * `settleRun`, but its public exports map does not expose
- * `./run-settlement`, so the settlement logic is implemented here,
- * line-checked against the official JS artifact.
+ * Note: background settlement reuses the official `settleRun` from the
+ * `@deepseek-ai/dsh-subagent` ROOT export (the `./run-settlement` subpath is
+ * not in the exports map, but the root barrel re-exports it) — the aborted
+ * → killed / diagnostic-abort → failed mapping is the official code path,
+ * not a local reimplementation.
  * @module dsh-subagent-roster/dispatch
  */
 
 import type { DispatchSpec } from './roster.ts'
+// Official settlement: the package ROOT export carries settleRun (the
+// `./run-settlement` subpath is not in the exports map, but the root barrel
+// re-exports it — same entry the official tool-subagent imports).
+import { settleRun } from '@deepseek-ai/dsh-subagent'
 
 /**
  * The slice of the host `ctx.subagents` surface this module touches —
@@ -355,48 +360,17 @@ export async function dispatchOneShotForeground(
 }
 
 /**
- * Map a child result to the task outcome: completed carries the final text,
- * every other reason (with its diagnostic) is failed without partial output.
- */
-function runOutcome(result: SubagentResultLike): JobOutcome {
-  const stopReason = result.stopReason
-  const detail = result.diagnostic === undefined
-    ? String(stopReason)
-    : `${String(stopReason)}; diagnostic: ${result.diagnostic}`
-  if (stopReason === 'completed') {
-    return { status: 'completed', output: outputText(result.output) }
-  }
-  return { status: 'failed', detail }
-}
-
-/**
- * Settle one run into a task outcome (official `settleRun` shape): result
- * and disposal failures become `failed`; when both fail, both details survive.
- */
-async function settleRun(run: SubagentRunLike): Promise<JobOutcome> {
-  let outcome: JobOutcome
-  try {
-    outcome = runOutcome(await run.result)
-  } catch (error: unknown) {
-    outcome = { status: 'failed', detail: formatError(error) }
-  }
-  try {
-    await run.dispose()
-  } catch (error: unknown) {
-    const prefix = outcome.detail === undefined ? '' : `${outcome.detail}; `
-    return { status: 'failed', detail: `${prefix}dispose failed: ${String(error)}` }
-  }
-  return outcome
-}
-
-/**
  * Settle pending startup without rejecting the task producer contract
  * (official `settleStart`): cancellation must not turn a failed cleanup
  * into a cleanly killed task.
  */
 async function settleStart(start: Promise<SubagentRunLike>, signal: AbortSignal): Promise<JobOutcome> {
   try {
-    return await settleRun(await start)
+    // Official settlement via the package root export: `runOutcome` maps a
+    // clean local cancellation (`aborted` without diagnostic) to killed, a
+    // provider-diagnosed abort and every other non-completed reason to
+    // failed, and keeps both details alive on a double failure.
+    return await settleRun(await start as Parameters<typeof settleRun>[0])
   } catch (error: unknown) {
     return signal.aborted && !(error instanceof AggregateError)
       ? { status: 'killed' }
