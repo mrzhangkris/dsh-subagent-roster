@@ -7,7 +7,7 @@ import { readTeamSync, readRetiredMemberIdsSync } from './state.ts'
 import type { TeamState } from './types.ts'
 import { MEMBER_TOOL_NAMES, TEAM_TOOL_NAMES } from './tool-names.ts'
 
-export const TEAM_ACTIVATION_PROMPT = 'AgentTeams (Agent Teams) provides multi-agent team collaboration. Apply these rules when the user requests it (including /agent-teams) or when continuing an existing team. Mentioning, quoting, discussing, or declining AgentTeams alone is not a request to start work.'
+export const TEAM_ACTIVATION_PROMPT = 'SubagentRoster (named subagent roster) provides durable named-subagent delegation. Apply these rules when the user requests it (including /agent-teams) or when continuing an existing roster. Mentioning, quoting, discussing, or declining SubagentRoster alone is not a request to start work.'
 export const TEAM_MEMBER_PROMPT = 'You are an AgentTeams member. Follow your assigned member persona. Use agent_teams_update_task, agent_teams_send_message and agent_teams_status for your own work; mark an assigned task in_progress before working and completed or failed after. Report completion or failure to the captain. Do not create, approve, edit or resume a team. If your durable membership is unavailable, report that to the parent instead of creating a replacement.'
 
 interface Exposure {
