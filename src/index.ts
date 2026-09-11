@@ -27,6 +27,7 @@ import {
   haltTeamWork,
   stagedPlanApprovedContext,
   registerAgentTeamsTools,
+  registerRosterTools,
   type StagedPlanMutation,
   type ToolsConfig,
 } from './tools.ts'
@@ -38,7 +39,8 @@ import { collectArchivedTeamsActivity, collectTeamsActivity } from './snapshot.t
 import { findTeamByCaptain } from './state.ts'
 import { formatProfilesForPrompt, type TeamProfileConfig } from './profiles.ts'
 import { installTeamCapabilities } from './capabilities.ts'
-import { registerRosterSettings } from './settings.ts'
+import { registerRosterSettings, getRoster } from './settings.ts'
+import { buildRosterSection, ROSTER_SECTION_NAME, ROSTER_SECTION_ORDER } from './section.ts'
 import { TEAM_TOOL_NAMES } from './tool-names.ts'
 
 import { authenticatedWebRoutes, readJsonRequest, RequestBodyError, type BrowserRequestGate, type WebRouteHost } from './web-routes.ts'
@@ -151,12 +153,34 @@ export function apply(ctx: Context, config: Config): void {
 
   const agentTeamsRuntime = registerAgentTeamsTools(ctx, resolved)
 
+  // Roster model-facing tools (roster_list + roster_agent): the dispatch
+  // chain reads `ctx.llm` (route resolution) and `ctx.subagents` (the
+  // transport capability gate — the Task 7 fail-closed dependency) through
+  // the closed-over context at execute time; `ctx.jobs` is read via
+  // `ctx.get('jobs')` so a headless profile without it keeps every other
+  // path functional.
+  registerRosterTools(ctx)
+
   // Roster settings namespace (`subagent-roster`) + hot read entry point:
   // dispatch and the settings card read the roster through getRoster(), which
   // re-reads the current settings source on every call. Optional seam: the
   // plugin keeps working (composition-entry roster) when no settings provider
   // is mounted.
   registerRosterSettings(ctx, config)
+
+  // Dynamic roster directory section: the text callback is evaluated at
+  // EVERY prompt assembly, so a committed roster change is visible on the
+  // next request with no manual refresh (no onRosterChange subscription
+  // needed). An empty roster renders '' — the registry drops empty sections.
+  ctx.systemPrompt.section({
+    name: ROSTER_SECTION_NAME,
+    order: ROSTER_SECTION_ORDER,
+    text: () => {
+      const read = getRoster()
+      if (!read.ok) return ''
+      return buildRosterSection(read.roster)?.text ?? ''
+    },
+  })
 
   installTeamCapabilities(ctx, {
     stateDir: resolved.stateDir,
