@@ -1,0 +1,105 @@
+{
+  "suite": "baixiao",
+  "description": "百晓生卷：围绕 bench/env/documents 冻结文档集的 8 题基准（tau-bench 范式：字面量+语义双判分）。全部题目答案可自持地从冻结文档得出；v1 环境无状态库，actions 留空，重放维度由 scorers 自然跳过。",
+  "source": {
+    "documents": "bench/env/documents/README.md 清单",
+    "repo_head_at_freeze": "e28a6a6c331f506758be84c11728cb42bd64a68c"
+  },
+  "tasks": [
+    {
+      "id": "bx-01",
+      "difficulty": "easy",
+      "instruction": "你是花名册中的博闻成员「百晓」。请仅依据给定文档回答：当前推荐的 DeepSeek Harness 版本与 AgentTeams 插件版本组合分别是什么？把插件安装到 web profile 的完整命令（锁定精确版本的写法）原样写出来。",
+      "actions": [],
+      "outputs": [
+        "0.1.5-rc.1",
+        "0.1.17",
+        "dsh plugin --profile web add"
+      ]
+    },
+    {
+      "id": "bx-02",
+      "difficulty": "easy",
+      "instruction": "你是花名册中的博闻成员「百晓」。请仅依据给定文档回答：团队状态文件保存在工作区的哪个目录下？队长邮箱的文件名是什么？各成员的邮箱文件放在哪个子目录、以什么形式存储？",
+      "actions": [],
+      "outputs": [
+        ".agent-teams",
+        "inbox",
+        "captain.jsonl"
+      ]
+    },
+    {
+      "id": "bx-03",
+      "difficulty": "easy",
+      "instruction": "你是花名册中的博闻成员「百晓」。请仅依据给定文档回答：在 profile 配置中，限制「成员再委派深度上限」和「团队人数上限」的配置键分别叫什么？团队人数上限的默认值是多少？",
+      "actions": [],
+      "outputs": [
+        "memberMaxDepth",
+        "maxMembers",
+        "8"
+      ]
+    },
+    {
+      "id": "bx-04",
+      "difficulty": "easy",
+      "instruction": "你是花名册中的博闻成员「百晓」。请仅依据给定文档回答：质量门禁模式下任务有哪几种 kind（请全部列出）？review 与 requirements 任务需要什么 verdict 才能标记 completed？",
+      "actions": [],
+      "outputs": [
+        "requirements",
+        "implementation",
+        "verification",
+        "review",
+        "integration",
+        "pass"
+      ]
+    },
+    {
+      "id": "bx-05",
+      "difficulty": "medium",
+      "instruction": "你是花名册中的博闻成员「百晓」。一位新用户刚把插件装到 web profile，想在本地做离线验证：请结合 README 与使用指南回答——离线与生命周期验证的完整命令链是什么？装完插件后还必须做什么，才能在 Web GUI 里看到插件效果？请说明理由。",
+      "actions": [],
+      "outputs": [
+        "pnpm verify",
+        {
+          "semantic": "答复是否说明了安装插件后必须停止并重新启动该 profile 的 Harness 进程、再刷新浏览器，插件效果（面板/工具）才会生效"
+        }
+      ]
+    },
+    {
+      "id": "bx-06",
+      "difficulty": "medium",
+      "instruction": "你是花名册中的博闻成员「百晓」。请仅依据给定文档回答：一项 in_progress 的任务被转派给另一位成员时，旧 attempt 会被如何处理？为什么迟到的任务更新无法覆盖新负责人的结果？另外列出任务状态机中的三种终态。",
+      "actions": [],
+      "outputs": [
+        "cancelled",
+        {
+          "semantic": "答复是否说明了转派会先使旧 attempt 失效/撤销并等待原成员安静，因此迟到的更新无法覆盖新 owner 的结果"
+        }
+      ]
+    },
+    {
+      "id": "bx-07",
+      "difficulty": "hard",
+      "instruction": "你是花名册中的博闻成员「百晓」。假设队长当前 LLM 路由是某 provider 的 deepseek-v4，现在用户明确要求成员「百晓」改用 provider openai、model gpt-5.5。请结合 README 配置说明与使用指南回答：该成员最终生效的 provider/model 是什么？它的思考强度会取什么档位？provider/model 的最终生效优先级链是怎样的？",
+      "actions": [],
+      "outputs": [
+        "gpt-5.5",
+        {
+          "semantic": "答复是否正确给出优先级链：成员显式 provider+model 最高，其次 memberModel 默认覆盖，再次队长当前路由；并说明 provider 或 model 任一改变时思考强度自动使用目标模型的默认档"
+        }
+      ]
+    },
+    {
+      "id": "bx-08",
+      "difficulty": "hard",
+      "instruction": "你是花名册中的博闻成员「百晓」。甲团队的审查循环反复未过触发了 escalated；乙团队被用户手动停止处于 halted。请结合 README 质量门禁说明与使用指南回答：halted 与 escalated 有什么本质区别？恢复 halted 团队的正确方式是什么？恢复之后，之前已取消的任务会不会被重建？",
+      "actions": [],
+      "outputs": [
+        "agent_teams_resume",
+        {
+          "semantic": "答复是否说明了 halted 表示人停止团队、escalated 只表示自动循环到上限（两者不是一回事），并且显式恢复（agent_teams_resume / 带 resume 的 create_task）不会重建已取消的任务"
+        }
+      ]
+    }
+  ]
+}

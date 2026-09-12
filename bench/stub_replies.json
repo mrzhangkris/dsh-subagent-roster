@@ -1,0 +1,11 @@
+{
+  "_comment": "StubAdapter 自测回复集：按 task id 给出从冻结文档可得出的正确答复，用于 run_eval --adapter stub 全流程自测。内容锚定 bench/env/documents 冻结副本，非仓库实时文件。",
+  "bx-01": "推荐组合是 DeepSeek Harness 0.1.5-rc.1 + AgentTeams 插件 0.1.17。锁定版本的安装命令：dsh plugin --profile web add --save-exact @nanmicoder/dsh-agent-teams@0.1.17",
+  "bx-02": "团队状态保存在工作区的 .agent-teams/<teamId>/ 目录；目录下有 team.json 与 inbox 子目录，队长邮箱是 inbox/captain.jsonl，每个成员一个 <member>.jsonl 邮箱文件（JSONL 格式）。",
+  "bx-03": "成员再委派深度上限的配置键是 memberMaxDepth（0 = 禁止），团队人数上限的配置键是 maxMembers，默认值为 8。",
+  "bx-04": "质量 kind 共五种：requirements、implementation、verification、review、integration。review 与 requirements 任务只有 verdict=pass 才能 completed；needs_revision/reject 必须 failed 并带 findings。",
+  "bx-05": "离线与生命周期验证命令链是 pnpm build && pnpm typecheck && pnpm verify。根据 README，安装插件后必须停止并重新启动该 profile 的 Harness 进程，再刷新浏览器，插件才会生效——因为插件是随 profile 组合挂载的 bundle，运行中的 Harness 进程不会热加载新装的插件。",
+  "bx-06": "任务状态机的三种终态是 completed、failed、cancelled（pending → claimed → in_progress → 终态）。转派时旧 attempt 会先被撤销/失效，系统等待原成员安静后才启动新 attempt，所以迟到成员携带旧 attempt_id 的更新无法覆盖新 owner 的结果。",
+  "bx-07": "最终生效的是 provider openai + model gpt-5.5。因为该成员被显式指定了 provider+model，优先级最高；优先级链为：成员显式 provider + model / model → memberModel 默认覆盖 → 队长当前路由。由于 provider 与 model 都变了，成员的思考强度自动使用目标模型（openai gpt-5.5）的默认档。",
+  "bx-08": "两者不是一回事：halted 表示人停止了团队，escalated 只表示自动审查循环到上限。恢复 halted 团队必须显式调用 agent_teams_resume（带非空 reason），或用 create_task 携带 resume 与 resumeReason；普通 create_task 会被拒绝。恢复不会重建已取消的任务，只有仍然 pending 的任务会被调度。"
+}

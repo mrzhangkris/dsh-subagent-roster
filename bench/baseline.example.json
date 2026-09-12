@@ -1,0 +1,47 @@
+{
+  "_comment": "baseline.json 格式示例（占位值，非真实基准线）。Task 11 首跑后执行 run_eval --baseline bench/baseline.json --freeze 生成真实 baseline 并冻结；suite_hash 对应当刻任务集，任务集任何变更都会使 baseline 失效（对比模式会拒绝并要求重冻）。",
+  "schema_version": 1,
+  "suite": "baixiao",
+  "suite_hash": "<sha256(canonical-json(tasks)) 首跑时自动计算>",
+  "created_at": "2026-09-12T09:00:00+08:00",
+  "role": "default",
+  "adapter": "cli",
+  "judge": "api",
+  "summary": {
+    "adapter": "cli",
+    "judge": "api",
+    "total": 8,
+    "passed_overall": 0,
+    "passed_programmatic": 0,
+    "pass_at_1": 0.0,
+    "judge_unavailable": 0,
+    "by_difficulty": {
+      "easy": { "total": 4, "passed_overall": 0, "pass_rate": 0.0 },
+      "medium": { "total": 2, "passed_overall": 0, "pass_rate": 0.0 },
+      "hard": { "total": 2, "passed_overall": 0, "pass_rate": 0.0 }
+    },
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "latency_s_total": 0.0,
+    "suite": "baixiao",
+    "suite_hash": "<同上>",
+    "role": "default",
+    "created_at": "<首跑时间，北京时间 +08:00>"
+  },
+  "rows": [
+    {
+      "task_id": "bx-01",
+      "difficulty": "easy",
+      "pass_programmatic": false,
+      "pass_judge": null,
+      "pass_overall": false,
+      "judge_status": "not_needed",
+      "latency_s": 0.0,
+      "tokens_in": 0,
+      "tokens_out": 0,
+      "failed_checks": [],
+      "judge_error": null,
+      "dispatch_error": null
+    }
+  ]
+}
