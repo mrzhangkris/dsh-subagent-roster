@@ -300,7 +300,7 @@ describe('preflightRoute — capability gate (contract 4, no silent degradation)
     const llm = mockLlm()
     const crippled: MockProvider = { capabilities: { persona: false, toolFilter: false } }
     const spec = baseSpec({
-      toolFilter: { deny: ['agent_teams_delete'] },
+      toolFilter: { deny: ['dangerous_tool'] },
       capabilitiesNeeded: ['persona', 'toolFilter'],
     })
     const result = await preflightRoute(

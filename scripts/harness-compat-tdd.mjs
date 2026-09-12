@@ -3,19 +3,14 @@
  */
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { mkdtemp, rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import { SubagentRuntime } from '@deepseek-ai/dsh-subagent'
 import { guardSubagentDelivery, installContinuableMemberSetup, queueMemberPrompt, sessionOwnEvents } from '../lib/harness-compat.js'
-import { installMemberSelectionRuntime, spawnMember } from '../lib/members.js'
-import { createTeamDir } from '../lib/state.js'
 
 const queueKey = Symbol.for('dsh.subagent.queuePrompt')
 const deliverKey = Symbol.for('dsh.subagent.deliverPrompt')
 const signal = new AbortController().signal
-const source = { kind: 'plugin', plugin: 'dsh-agent-teams' }
+const source = { kind: 'plugin', plugin: 'dsh-subagent-roster' }
 const content = [{ type: 'text', text: 'next distinct turn' }]
 
 function scope(extra = {}) {
@@ -41,15 +36,14 @@ function modernRuntime() {
   return { [deliverKey]() {}, sendMessage() {} }
 }
 
-function child({ workspace = process.cwd(), effort, inherited = false } = {}) {
+function child() {
   const descriptor = { type: 'subagent/descriptor', data: {
-    version: 3, mode: 'continuable', provider: 'spawn', label: 'agent-teams:team:worker',
+    version: 3, mode: 'continuable', provider: 'spawn', label: 'subagent-roster:role:worker',
     agentProvider: 'primary', agentModel: 'model',
   } }
   const agent = {
     id: 'member-id', status: 'idle', whenIdle: async () => {},
-    options: { provider: 'primary', model: 'model', reasoningEffort: effort },
-    session: { header: { cwd: workspace, parentSession: 'captain' }, ownEvents: () => inherited ? [] : [descriptor] },
+    session: { header: { cwd: process.cwd(), parentSession: 'captain' }, ownEvents: () => [descriptor] },
   }
   agent.ctx = scope() // Harness 0.1.5 no longer exposes Context.agent.
   return agent
@@ -175,25 +169,6 @@ await test('legacy session history excludes its inherited prefix; modern uses ow
   assert.deepEqual(sessionOwnEvents(session), [own])
 })
 
-await test('synchronous modern setup selects the first request, deduplicates events, and disposes for HMR', async () => {
-  const ctx = scope({ subagents: modernRuntime() })
-  const bridge = installMemberSelectionRuntime(ctx, '.agent-teams')
-  const agent = child()
-  await bridge.withPending('captain', 'agent-teams:team:worker', {
-    provider: 'selected', model: 'selected-model', reasoningEffort: 'high',
-  }, async () => {
-    ctx.emit('agent/session-start', { agent, source: 'startup' })
-    assert.equal(agent.ctx.listeners.get('agent/request').size, 1)
-    ctx.emit('agent/session-start', { agent, source: 'compact' })
-    assert.equal(agent.ctx.listeners.get('agent/request').size, 1)
-    assert.deepEqual(await selection(agent), { provider: 'selected', model: 'selected-model', reasoningEffort: 'high' })
-  })
-  ctx.dispose()
-  assert.equal(agent.ctx.listeners.get('agent/request').size, 0)
-  assert.equal(agent.ctx.listeners.get('agent/error').size, 0)
-  agent.ctx.dispose()
-})
-
 await test('child disposal releases lifecycle contributions and permits a same-id resumed Agent', async () => {
   const ctx = scope({ subagents: modernRuntime() })
   let setups = 0
@@ -222,75 +197,7 @@ await test('setup exception blocks request instead of being swallowed by session
   assert.equal(agent.ctx.listeners.get('agent/request').size, 0)
 })
 
-await test('a child inheriting another member descriptor does not acquire member selection or failure hooks', () => {
-  const ctx = scope({ subagents: modernRuntime() })
-  installMemberSelectionRuntime(ctx, '.agent-teams')
-  const agent = child({ inherited: true })
-  ctx.emit('agent/session-start', { agent })
-  assert.equal(agent.ctx.listeners.size, 0)
-  const foreign = child()
-  foreign.session.ownEvents = () => [{ type: 'subagent/descriptor', data: {
-    version: 3, mode: 'continuable', provider: 'spawn', label: 'external-research-worker',
-    agentProvider: 'primary', agentModel: 'model',
-  } }]
-  ctx.emit('agent/session-start', { agent: foreign })
-  assert.equal(foreign.ctx.listeners.size, 0)
-  ctx.dispose()
-})
-
-for (const fallbackActive of [false, true]) {
-  await test(`cold resume restores route and effort coherently (fallbackActive=${fallbackActive})`, async t => {
-    const workspace = await mkdtemp(join(tmpdir(), 'agent-teams-compat-'))
-    t.after(() => rm(workspace, { recursive: true, force: true }))
-    await createTeamDir(join(workspace, '.agent-teams'), {
-      id: 'team', name: 'Team', captainSessionId: 'captain', createdAt: 1, taskSeq: 0, tasks: [],
-      members: [{ id: 'member-id', name: 'worker', status: 'idle', joinedAt: 1,
-        provider: 'primary', model: 'model', reasoningEffort: 'high',
-        fallback: { provider: 'backup', model: 'backup-model' }, fallbackActive,
-        ...(fallbackActive ? { activeProvider: 'backup', activeModel: 'backup-model' } : {}),
-      }],
-    })
-    const ctx = scope({ subagents: modernRuntime() })
-    t.after(() => ctx.dispose())
-    installMemberSelectionRuntime(ctx, '.agent-teams')
-    const agent = child({ workspace })
-    ctx.emit('agent/session-start', { agent, source: 'resume' })
-    assert.deepEqual(await selection(agent), fallbackActive
-      ? { provider: 'backup', model: 'backup-model' }
-      : { provider: 'primary', model: 'model', reasoningEffort: 'high' })
-    if (fallbackActive) {
-      let delegated = 0
-      const handler = [...agent.ctx.listeners.get('agent/request-error')][0]
-      assert.equal(await handler({ agent, signal, failure: { code: 'AUTH' } }, async () => { delegated++ }), undefined)
-      assert.equal(delegated, 1)
-    } else {
-      const handler = [...agent.ctx.listeners.get('agent/request-error')][0]
-      assert.deepEqual(await handler({ agent, signal, failure: { code: 'AUTH' } }, async () => undefined), { kind: 'retry' })
-      // Harness retries inside the SAME step, without assembling the prompt
-      // again. The accepted fallback must replace the captured request route.
-      assert.deepEqual(await requestSelection(agent), { provider: 'backup', model: 'backup-model' })
-    }
-  })
-}
-
-await test('spawn explicitly passes reasoning effort, preserving persona and tool filters', async () => {
-  let received
-  const ctx = { subagents: {
-    getProvider: () => ({ prepareContinuable() {}, capabilities: { persona: true, toolFilter: true } }),
-    startContinuable: async spec => { received = spec; return { childId: 'child' } },
-  } }
-  const captain = { id: 'captain' }
-  const team = { id: 'team', name: 'Team', captainSessionId: captain.id, members: [], tasks: [], createdAt: 1, taskSeq: 0 }
-  const member = { id: '', name: 'worker', role: 'engineer', joinedAt: 1, status: 'idle' }
-  await spawnMember(ctx, { provider: 'spawn' }, { withPending: (_p, _l, _s, run) => run() },
-    { provider: 'chosen', model: 'model', reasoningEffort: 'high' }, captain, team, member, '.agent-teams', signal)
-  assert.deepEqual(received.request.agentOptions, { provider: 'chosen', model: 'model', reasoningEffort: 'high' })
-  assert.match(received.request.persona, /engineer/)
-  assert.ok(received.request.toolFilter.deny.includes('agent_teams_create'))
-  assert.equal(member.id, 'child')
-})
-
-await test('0.1.5 delivery queues team jobs and guards both host modes across HMR', async () => {
+await test('0.1.5 delivery queues job prompts and guards both host modes across HMR', async () => {
   const calls = []
   const runtime = {
     [deliverKey](...args) { assert.equal(this, runtime); calls.push(args); return Promise.resolve('accepted') },

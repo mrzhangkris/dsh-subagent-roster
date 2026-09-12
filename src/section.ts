@@ -24,7 +24,7 @@ import type { RosterAgent, RosterConfig } from './schema.ts'
 /** The stable section name under the system-prompt registry. */
 export const ROSTER_SECTION_NAME = 'subagent-roster:roster'
 
-/** Default order: directly after the AgentTeams usage policy section (117). */
+/** Default order: directly after the roster usage policy section (117). */
 export const ROSTER_SECTION_ORDER = 118
 
 /**

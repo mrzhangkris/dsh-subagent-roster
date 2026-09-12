@@ -1,10 +1,8 @@
-# Project maintenance skills
+# Project maintenance notes
 
-Before using a DSH plugin lifecycle skill in this repository, read `skills/README.md` for its source, version, and project-specific applicability. Prefer the project copy when a global skill has the same name.
+This repository is the `@mrzhangkris/dsh-subagent-roster` fork. The upstream plugin surface was removed in the identifier-separation refactor; verify exact Harness tags, npm artifacts, the resolved dependency graph, and subagent-roster behavior against the live host rather than historical docs. Historical evidence under `docs/` describes earlier maintenance rounds and is kept as record only.
 
-Vendored skills are community guidance. Historical version examples are not the current support policy; verify exact Harness tags, npm artifacts, the resolved dependency graph, and AgentTeams behavior. Preserve upstream skill files; record local integration rules separately.
-
-User instructions and authorization take precedence over skill defaults. Do not repeat confirmation for work the user has already authorized.
+User instructions and authorization take precedence over tooling defaults. Do not repeat confirmation for work the user has already authorized.
 
 # Browser automation
 

@@ -1,129 +1,45 @@
-/** Browser plugin for the AgentTeams activity floater and conversation card. */
+/** Browser plugin for the subagent-roster settings card. */
 
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
-import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import type {} from '@deepseek-ai/dsh-api-session-controller/client'
-import type {} from '@deepseek-ai/dsh-client-ui-session/client'
-import type {} from '@deepseek-ai/dsh-client-ui-chat/client'
-import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
-import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 // Type-only: pulls the official browser locale service into ClientContext.
 import type {} from '@deepseek-ai/dsh-client-locale/client'
-// Conversation folding is target-neutral; keyed Chat rendering is owned by
-// ui-chat, whose declaration is loaded above.
-import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
-// The frame-level overlay is declared by ui-layout. This import is type-only;
-// ctx.slots.inject below owns the runtime wait for the declaration.
-import type { UsePanelInfo } from '@deepseek-ai/dsh-client-ui-layout/client'
-// Official model catalog/directory service. The staged roster reads its
-// provider/model/effort metadata without mutating the captain's own selection.
-import type {} from '@deepseek-ai/dsh-client-ui-model-selection/client'
-import { ActivityPanel } from './ActivityPanel.tsx'
-import { AgentTeamsCard, type AgentTeamsCardInjected } from './AgentTeamsCard.tsx'
-import { agentTeamsCardDefinition } from './agent-teams-card-definition.ts'
-import {
-  AGENT_TEAMS_LOCALE_NAMESPACE, en, zh, type AgentTeamsLocaleKey,
-} from './locales.ts'
+// Type-only: pulls the slot registry (ctx.slots) into ClientContext.
+import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
+import type { SubagentRosterLocaleKey } from './roster-locales.ts'
 import {
   SUBAGENT_ROSTER_LOCALE_NAMESPACE,
   en as rosterEn,
   zh as rosterZh,
-  type SubagentRosterLocaleKey,
 } from './roster-locales.ts'
 import { ROSTER_NS } from '../schema.ts'
 import { RosterCard, type RosterSettingsScopeBinder, type RosterSettingsScope } from './RosterCard.tsx'
-import { openAgentTeamMember, type AgentTeamsLayoutNavigator } from './session-navigation.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
-    /** AgentTeams conversation card and activity monitor copy. */
-    agentTeams: AgentTeamsLocaleKey
     /** RosterCard settings-card copy. */
     subagentRoster: SubagentRosterLocaleKey
   }
 }
 
-/** Required services: conversation nodes, slots, sessions navigation, and locale. */
-export const inject = ['uiConversation', 'slots', 'sessions', 'locale', 'modelDirectories', 'layout']
-
-/** The host supplies this hook for the lifetime of a 0.1.5 root slot. */
-interface PanelNavigationProps {
-  usePanelInfo?: UsePanelInfo
-}
-const useLegacyPanelInfo: UsePanelInfo = select => select({ activePanelId: null })
-
-/** The replayed user message is the canonical transcript entry. */
-function HiddenAgentTeamsCommand(): null {
-  return null
-}
+/** Required services: slots for the settings-card slot and locale for copy. */
+export const inject = ['slots', 'locale']
 
 /**
- * Register the activity monitor in the shell's additive overlay and the
- * in-conversation team card. The card's activity button re-opens a folded
- * monitor via a window event — the recovery path for an old session.
+ * RosterCard: the plugin's settings card, dispatched by the Settings →
+ * Plugins tab through the keyed `settings.plugin.item` slot (key = the
+ * roster's settings namespace). The `settingsScope` service is injected
+ * LAZILY — the same optional-seam philosophy as the host half's settings
+ * registration — so a client environment without it simply renders no card
+ * instead of failing the whole browser plugin. The slot contract types are
+ * local structural mirrors (see RosterCard.tsx): the fork takes no
+ * dependency on dsh-client-ui-settings(-plugins).
  */
 export function apply(ctx: ClientContext): void {
-  ctx.effect(
-    () => ctx.locale.register(AGENT_TEAMS_LOCALE_NAMESPACE, { zh, en }),
-    'agent-teams: dictionaries',
-  )
   ctx.effect(
     () => ctx.locale.register(SUBAGENT_ROSTER_LOCALE_NAMESPACE, { zh: rosterZh, en: rosterEn }),
     'subagent-roster: dictionaries',
   )
-  const openMember = (parentId: SessionId, childId: SessionId): void => {
-    void openAgentTeamMember(ctx.sessions, parentId, childId, ctx.layout as AgentTeamsLayoutNavigator).catch((error: unknown) => {
-      console.warn(`agent-teams: failed to open member transcript ${childId}: ${String(error)}`)
-    })
-  }
-  const Panel = ({ t, usePanelInfo }: PropsLocale<'agentTeams'> & PanelNavigationProps) => {
-    // A host's standard hook set is fixed for this mounted plugin instance.
-    const usePanel = usePanelInfo ?? useLegacyPanelInfo
-    const conversationVisible = usePanel(panel => panel.activePanelId === null)
-    return (
-    <ActivityPanel
-      conversationVisible={conversationVisible}
-      sessionsList={ctx.sessions.list}
-      modelDirectories={ctx.modelDirectories}
-      openMember={openMember}
-      t={t}
-    />
-    )
-  }
-  ctx.slots.inject('shell.overlay', () => ctx.slots.register({
-    name: 'shell.overlay',
-    id: 'agent-teams-activity',
-    order: 80,
-    label: 'AgentTeams activity',
-    locale: AGENT_TEAMS_LOCALE_NAMESPACE,
-  }, Panel))
 
-  // The host command is only the slash-menu/admission surface. Its input is
-  // replayed as the visible user message, so the generic result row would be
-  // a duplicate placed before that message by command lifecycle ordering.
-  ctx.slots.inject('conversation.chat.commandview', () => ctx.slots.register({
-    name: 'conversation.chat.commandview',
-    key: 'agent-teams',
-  }, HiddenAgentTeamsCommand))
-
-  ctx.uiConversation.events.register(agentTeamsCardDefinition)
-  ctx.slots.inject('conversation.chat.node', () => ctx.slots.register({
-    name: 'conversation.chat.node',
-    key: 'agent-teams',
-    locale: AGENT_TEAMS_LOCALE_NAMESPACE,
-    inject: (): AgentTeamsCardInjected => ({
-      openMember,
-    }),
-  }, AgentTeamsCard))
-
-  // RosterCard: the plugin's settings card, dispatched by the Settings →
-  // Plugins tab through the keyed `settings.plugin.item` slot (key = the
-  // roster's settings namespace). The `settingsScope` service is injected
-  // LAZILY — the same optional-seam philosophy as the host half's settings
-  // registration — so a client environment without it simply renders no card
-  // instead of failing the whole browser plugin. The slot contract types are
-  // local structural mirrors (see RosterCard.tsx): the fork takes no
-  // dependency on dsh-client-ui-settings(-plugins).
   ctx.inject(['settingsScope'], (scopeCtx) => {
     const binder = (scopeCtx as unknown as { settingsScope?: RosterSettingsScopeBinder }).settingsScope
     if (binder === undefined) return

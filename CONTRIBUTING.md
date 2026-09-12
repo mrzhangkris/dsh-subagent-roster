@@ -1,10 +1,8 @@
-# Contributing to AgentTeams
+# Contributing to subagent-roster
 
-Contributions are welcome: a precise reproduction, a focused fix, documentation, or a runnable host test all help. Please keep unrelated UI, installation, scheduler, and host migrations in separate PRs so each contribution can be reviewed and retained.
+Contributions are welcome: a precise reproduction, a focused fix, documentation, or a runnable host test all help. Please keep unrelated UI, installation, and host migrations in separate PRs so each contribution can be reviewed and retained.
 
 ## Start with the actual environment
-
-Read [the project skill guide](skills/README.md) before using a DSH lifecycle skill. The project copies take precedence over similarly named global skills. Their historical version examples are guidance, not our current compatibility policy.
 
 Report the plugin version, actual Harness package version, OS, Node version, and profile. For Desktop, include both the application version and its embedded Harness version; upgrading a global CLI does not upgrade the embedded host. Include the error and minimal reproduction without credentials or unrelated private configuration.
 
@@ -28,7 +26,7 @@ Then consume that exact file through the real Harness entry point:
 node scripts/harness-runtime-verify.mjs \
   --host-version 0.1.2-rc.1 \
   --artifact candidate.tgz \
-  --report-dir /tmp/agent-teams-rc1-check
+  --report-dir /tmp/subagent-roster-rc1-check
 ```
 
 Repeat for every exact target returned by `node scripts/compatibility.mjs --github-output`, using the **same tarball** and a separate report directory. The runner pins and checks the entire DSH dependency cohort, creates isolated profiles, and replaces only the model adapter with a deterministic fixture. It needs no real API key. Its six required scenarios cover normal lifecycle, lifecycle cold recovery, fallback, fallback cold recovery, final failure, and waking a captain through a member notification after the captain has actually become idle. Each checks real plugin loading, tools, continuable members, persisted state, and the relevant messaging behavior.
@@ -43,7 +41,6 @@ Explain the concrete trigger, the resulting behavior, the exact tested host vers
 
 Maintainers review the current head and retain useful contributions. A small independent PR may be merged directly after its checks; overlapping compatibility PRs may be integrated together. When code is adapted or squashed, retain author attribution and link the original PR. A conflict or an outdated base is a request to rebase or narrow scope, not a reason to discard a sound contribution.
 
-Do not overwrite vendored skill files while adapting project policy. Keep upstream files and their provenance lock intact; put local applicability in [skills/README.md](skills/README.md). Run `pnpm sync:skill` and `pnpm verify:skill` after changes to project-owned skills.
 
 ## Track issues and releases accurately
 

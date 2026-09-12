@@ -8,8 +8,8 @@
  *
  * Error convention: every mapped failure is surfaced as a thrown, messageed
  * Error from `execute` — the DSH tool registry materializes thrown tool
- * errors as `isError` results whose text carries the message (the exact
- * convention all 11 existing agent_teams_* tools use). Only the parent
+ * errors as `isError` results whose text carries the message (the same
+ * convention the official tools use). Only the parent
  * defense (missing `exec.agent`) throws without further mapping, mirroring
  * the dispatch modules' own parent line of defense.
  *

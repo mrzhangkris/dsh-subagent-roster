@@ -9,13 +9,14 @@
  * Injected service shapes (mirroring the fork's own call surfaces):
  * - `deps.llm.resolveCallConfig({ provider, model }, signal?)` →
  *   `{ provider, model, reasoningEffort? }` — the exact object-config call
- *   `spawnMember` makes in `members.ts`. It is a LOCAL route-resolvability
- *   check (route exists in the provider registry), NOT a liveness probe:
+ *   a member spawn makes against the host llm service. It is a LOCAL route-
+ *   resolvability check (route exists in the provider registry), NOT a
+ *   liveness probe:
  *   passing it does NOT guarantee a request succeeds — network/auth failures
  *   surface later through the dispatch settlement error mapping.
  * - `deps.capabilities.getProvider(name)` → provider record or undefined —
- *   the host `ctx.subagents` service, the same support-face source
- *   `spawnMember` reads. Per the host contract, method presence IS the
+ *   the host `ctx.subagents` service, the same support-face source a member
+ *   spawn reads. Per the host contract, method presence IS the
  *   capability: `continuable` support means `prepareContinuable` exists on
  *   the provider (fork has it, spawn does not); the other knobs map onto the
  *   provider's `capabilities` booleans by name.

@@ -19,9 +19,6 @@
   },
   "files": [
     "lib",
-    "assets/agent-teams",
-    "assets/readme",
-    "assets/ui.png",
     "cordis.patch.yml",
     "release-notes",
     "README.md",
@@ -32,23 +29,22 @@
   ],
   "license": "MIT",
   "author": {
-    "name": "\u7a0b\u5e8f\u5458\u963f\u6c5f (Relakkes)",
-    "email": "relakkes@gmail.com",
-    "url": "https://github.com/NanmiCoder"
+    "name": "张鹏 (mrzhangkris)",
+    "url": "https://github.com/mrzhangkris"
   },
-  "homepage": "https://github.com/NanmiCoder/dsh-agent-teams#readme",
+  "homepage": "https://github.com/mrzhangkris/dsh-subagent-roster#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/NanmiCoder/dsh-agent-teams.git"
+    "url": "git+https://github.com/mrzhangkris/dsh-subagent-roster.git"
   },
   "bugs": {
-    "url": "https://github.com/NanmiCoder/dsh-agent-teams/issues"
+    "url": "https://github.com/mrzhangkris/dsh-subagent-roster/issues"
   },
   "keywords": [
     "dsh",
     "dsh-plugin",
     "deepseek-harness",
-    "agent-teams",
+    "subagent-roster",
     "multi-agent",
     "subagent",
     "ai-agent",
@@ -68,13 +64,7 @@
     },
     "client": {
       "inject": [
-        "@deepseek-ai/dsh-client-locale",
-        "@deepseek-ai/dsh-client-ui-conversation",
-        "@deepseek-ai/dsh-client-ui-layout",
-        "@deepseek-ai/dsh-client-ui-model-selection",
-        "@deepseek-ai/dsh-api-session-controller",
-        "@deepseek-ai/dsh-client-ui-session",
-        "@deepseek-ai/dsh-client-ui-chat"
+        "@deepseek-ai/dsh-client-locale"
       ],
       "platform": "web"
     }
@@ -83,17 +73,11 @@
     "build": "node scripts/clean-build.mjs && tsc -p tsconfig.json && tsc -p tsconfig.client.json && tsdown",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.client.json --noEmit",
     "test": "vitest run",
-    "sync:skill": "node scripts/sync-skill.mjs",
-    "update:skills": "node scripts/update-skills.mjs",
-    "test:skills-updater": "node --test scripts/update-skills.test.mjs",
-    "verify:skill": "node scripts/sync-skill.mjs --check",
-    "verify": "node scripts/harness-compat-tdd.mjs && pnpm verify:web-routes && pnpm verify:release && pnpm verify:compatibility && pnpm verify:http-body && pnpm verify:capabilities",
+    "verify": "node scripts/harness-compat-tdd.mjs && pnpm verify:release && pnpm verify:compatibility && pnpm verify:capabilities",
     "prepublishOnly": "pnpm build && pnpm verify",
-    "verify:web-routes": "node scripts/web-routes-verify.mjs",
     "verify:release": "node --test scripts/release-metadata.test.mjs",
     "verify:harness-contract": "node scripts/harness-compat-tdd.mjs",
     "verify:compatibility": "node scripts/compatibility.mjs && node --test scripts/compatibility.test.mjs && node scripts/doctor.mjs",
-    "verify:http-body": "node --test scripts/http-body.test.mjs",
     "doctor": "node scripts/doctor.mjs",
     "verify:capabilities": "node --test scripts/capabilities.test.mjs"
   },
@@ -235,7 +219,7 @@
     "vitest": "5.0.0"
   },
   "bin": {
-    "dsh-agent-teams-doctor": "scripts/doctor.mjs"
+    "dsh-subagent-roster-doctor": "scripts/doctor.mjs"
   },
   "pnpm": {
     "overrides": {

@@ -1,5 +1,5 @@
 /**
- * Browser client bundle for dsh-agent-teams, mirroring the DeepSeek Harness
+ * Browser client bundle for dsh-subagent-roster, mirroring the DeepSeek Harness
  * `clientBundle` protocol (packages/client/tsdown.client.ts):
  *
  * - CJS closure-factory artifact: `window.__ModuleLoader__.load({ id,

@@ -2,134 +2,84 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { PreStepDecision } from '@deepseek-ai/dsh-agent'
 import type { CommandInvocation, CommandResult } from '@deepseek-ai/dsh-commands'
 import { createUserMessage, type UserMessage } from '@deepseek-ai/dsh-llm'
-import { parseProfileInvocation, type TeamProfileConfig, type AgentTeamsInvocation } from './profiles.ts'
 
-export const AGENT_TEAMS_COMMAND = 'agent-teams'
-const PROFILE_COMMAND_PREFIX = `${AGENT_TEAMS_COMMAND}-`
+/** The closed-namespace roster activation command. */
+export const ROSTER_COMMAND = 'roster'
 
 declare module '@deepseek-ai/dsh-llm' {
   interface MessageSourceMap {
-    'agent-teams-command': { readonly kind: 'agent-teams-command'; readonly goal?: string; readonly profile?: string }
+    'subagent-roster-command': { readonly kind: 'subagent-roster-command'; readonly goal?: string }
   }
 }
 
-const GESTURE = /^\/agent-teams(?=$|[\t\n\r ])/u
+const GESTURE = /^\/roster(?=$|[\t\n\r ])/u
 
-/**
- * Convert a configured profile key into a stable, closed-namespace command
- * suffix. Only lowercase ASCII letters, digits and dashes are representable;
- * this deliberately prevents accidental command aliases for ambiguous profile
- * names such as `foo bar`, `foo_bar`, or non-ASCII keys.
- */
-export function profileCommandName(profileName: string): string | undefined {
-  const normalized = profileName.trim().toLowerCase()
-  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(normalized)) return undefined
-  return `${PROFILE_COMMAND_PREFIX}${normalized}`
+/** One roster activation invocation parsed from user text. */
+export interface RosterInvocation {
+  goal: string
 }
 
-/** Resolve a profile command only when it maps uniquely to a live profile. */
-function profileForCommand(commandName: string, profiles: Record<string, TeamProfileConfig>): string | undefined {
-  const matches = Object.keys(profiles).filter((profileName) => profileCommandName(profileName) === commandName)
-  return matches.length === 1 ? matches[0] : undefined
+/** Parse a `/roster` gesture (with or without the leading slash) into a goal. */
+export function parseRosterInvocation(text: string): RosterInvocation {
+  return { goal: text.trim() }
 }
 
-/** Parse either the generic command or one generated profile alias. */
-function parseCommandText(text: string, profiles: Record<string, TeamProfileConfig>): AgentTeamsInvocation | undefined {
+/** Parse either the slash command or the plain-text gesture. */
+function parseCommandText(text: string): RosterInvocation | undefined {
   const trimmed = text.trimStart()
-  if (GESTURE.test(trimmed)) return parseProfileInvocation(trimmed.slice(AGENT_TEAMS_COMMAND.length + 1).trim())
-  if (!trimmed.startsWith(`/${PROFILE_COMMAND_PREFIX}`)) return undefined
-  const tokenEnd = trimmed.search(/[\t\n\r ]/u)
-  const commandName = trimmed.slice(1, tokenEnd === -1 ? undefined : tokenEnd)
-  const profile = profileForCommand(commandName, profiles)
-  if (profile === undefined) return undefined
-  return { profile, goal: (tokenEnd === -1 ? '' : trimmed.slice(tokenEnd)).trim() }
+  if (GESTURE.test(trimmed)) return parseRosterInvocation(trimmed.slice(ROSTER_COMMAND.length + 1).trim())
+  return undefined
 }
 
-export function invokedAgentTeamsInvocation(messages: readonly UserMessage[], getProfiles: () => Record<string, TeamProfileConfig> = () => ({})): AgentTeamsInvocation | undefined {
+export function invokedRosterInvocation(messages: readonly UserMessage[]): RosterInvocation | undefined {
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages[index]
     if (message === undefined || message.source.kind !== 'user') continue
     for (const block of message.content) {
       if (block.type !== 'text') continue
-      const invocation = parseCommandText(block.text, getProfiles())
+      const invocation = parseCommandText(block.text)
       if (invocation !== undefined) return invocation
     }
   }
   return undefined
 }
 
-export function invokedAgentTeamsGoal(messages: readonly UserMessage[]): string | undefined {
-  return invokedAgentTeamsInvocation(messages)?.goal
-}
-
-export function buildActivationDirective(goal: string, profile?: string): string {
+export function buildActivationDirective(goal: string): string {
   const lines = [
-    'The user invoked an AgentTeams slash command. Follow the AgentTeams protocol already in your system instructions. Inspect existing team state with agent_teams_status when needed.',
-    'Respect the current team state. Continue an existing plan or team without recreating it. Only when no current team exists, call agent_teams_create with approval="required". Build the complete staged roster and tasks, then stop and ask the user to review the Web plan. Do not approve or start it in this same turn.',
+    'The user invoked the /roster command. Follow the roster protocol already in your system instructions: if unsure which roles exist, call roster_list first, then dispatch the suitable named role with roster_agent.',
+    'Pass the goal below as the role\'s self-contained prompt. There is no team state to create, approve, or resume — this plugin only dispatches named roles.',
   ]
-  if (profile !== undefined) {
-    lines.push(
-      `Use profile="${profile}" when creating a new team.`,
-      'This profile supplies the member roster. After create, do not recreate members.',
-    )
-  }
-  lines.push(goal === '' ? 'The goal was not given — ask the user what the team should accomplish.' : `Goal: ${goal}`)
+  lines.push(goal === '' ? 'The goal was not given — ask the user what the dispatched role should accomplish.' : `Goal: ${goal}`)
   return lines.join('\n')
 }
 
-export function registerAgentTeamsCommand(ctx: Context, getProfiles: () => Record<string, TeamProfileConfig> = () => ({})): void {
+export function registerRosterCommand(ctx: Context): void {
   ctx.effect(() => {
-    const dispose: Array<() => void> = []
-    dispose.push(ctx.commands.register({
-      name: AGENT_TEAMS_COMMAND,
-      description: 'run a goal with a multi-agent team (you become the captain)',
-      input: { hint: '[--profile <name>] <goal>' },
+    return ctx.commands.register({
+      name: ROSTER_COMMAND,
+      description: 'dispatch a named roster role for a goal (roster protocol)',
+      input: { hint: '<goal>' },
       handler(invocation: CommandInvocation): CommandResult {
-        let parsed: AgentTeamsInvocation
-        try { parsed = parseProfileInvocation(invocation.rawInput.trim()) } catch (error: unknown) { return { kind: 'error', text: String(error) } }
-        if (parsed.profile !== undefined && !Object.keys(getProfiles()).some(key => key.trim() === parsed.profile)) return { kind: 'error', text: `unknown AgentTeams profile "${parsed.profile}"` }
-        if (parsed.profile === undefined && parsed.goal === '') return { kind: 'error', text: `Usage: /${AGENT_TEAMS_COMMAND} [--profile <name>] <goal>` }
-        invocation.agent.followup(createUserMessage({ content: [{ type: 'text', text: `/${AGENT_TEAMS_COMMAND}${invocation.rawInput}` }], source: { kind: 'user' } }))
-        return { kind: 'success', text: `AgentTeams activated${parsed.profile === undefined ? '' : ` with profile ${parsed.profile}`} — the captain will assemble the team.` }
+        const parsed = parseRosterInvocation(invocation.rawInput.trim())
+        if (parsed.goal === '') return { kind: 'error', text: `Usage: /${ROSTER_COMMAND} <goal>` }
+        // The host command is only the admission surface: its input is
+        // replayed as the visible user message, and the gesture boundary
+        // (agent/pre-step) turns it into the roster directive.
+        invocation.agent.followup(createUserMessage({ content: [{ type: 'text', text: `/${ROSTER_COMMAND}${invocation.rawInput}` }], source: { kind: 'user' } }))
+        return { kind: 'success', text: 'Roster activation — the model will dispatch a suitable named role.' }
       },
-    }))
-    for (const profileName of Object.keys(getProfiles())) {
-      const commandName = profileCommandName(profileName)
-      if (commandName === undefined) continue
-      dispose.push(ctx.commands.register({
-        name: commandName,
-        description: `run a goal with the AgentTeams ${profileName} profile`,
-        input: { hint: '<goal>' },
-        handler(invocation: CommandInvocation): CommandResult {
-          const profile = profileForCommand(commandName, getProfiles())
-          if (profile === undefined) return { kind: 'error', text: `AgentTeams profile command "/${commandName}" is unavailable` }
-          invocation.agent.followup(createUserMessage({ content: [{ type: 'text', text: `/${commandName}${invocation.rawInput}` }], source: { kind: 'user' } }))
-          return { kind: 'success', text: `AgentTeams activated with profile ${profile} — the captain will assemble the team.` }
-        },
-      }))
-    }
-    return () => {
-      for (const unregister of dispose.reverse()) unregister()
-    }
-  }, 'agent-teams: slash commands')
+    })
+  }, 'subagent-roster: slash command')
 }
 
-export function installAgentTeamsGestureBoundary(ctx: Context, getProfiles: () => Record<string, TeamProfileConfig> = () => ({})): void {
+export function installRosterGestureBoundary(ctx: Context): void {
   ctx.on('agent/pre-step', async ({ messages, signal }, next): Promise<PreStepDecision> => {
     const decision = await next()
     if (decision.kind === 'reject') return decision
-    let invocation: AgentTeamsInvocation | undefined
-    try { invocation = invokedAgentTeamsInvocation(messages, getProfiles) } catch (error: unknown) { return { kind: 'enter', messages: [...decision.messages, createUserMessage({ content: [{ type: 'text', text: `AgentTeams profile parsing failed: ${String(error)}` }], source: { kind: 'agent-teams-command' } })] } }
+    let invocation: RosterInvocation | undefined
+    try { invocation = invokedRosterInvocation(messages) } catch (error: unknown) { return { kind: 'enter', messages: [...decision.messages, createUserMessage({ content: [{ type: 'text', text: `Roster gesture parsing failed: ${String(error)}` }], source: { kind: 'subagent-roster-command' } })] } }
     if (invocation === undefined) return decision
     signal.throwIfAborted()
-    const profiles = getProfiles()
-    const matched = invocation.profile === undefined
-      ? undefined
-      : Object.entries(profiles).find(([key]) => key.trim() === invocation.profile)
-    const known = invocation.profile === undefined || matched !== undefined
-    const text = !known
-      ? `AgentTeams profile "${invocation.profile}" does not exist. Available profiles: ${Object.keys(profiles).join(', ') || '(none)'}. Do not create a team.`
-      : buildActivationDirective(invocation.goal, invocation.profile)
-    return { kind: 'enter', messages: [...decision.messages, createUserMessage({ content: [{ type: 'text', text }], source: { kind: 'agent-teams-command', ...invocation.goal === '' ? {} : { goal: invocation.goal }, ...invocation.profile === undefined ? {} : { profile: invocation.profile } } })] }
+    return { kind: 'enter', messages: [...decision.messages, createUserMessage({ content: [{ type: 'text', text: buildActivationDirective(invocation.goal) }], source: { kind: 'subagent-roster-command', ...invocation.goal === '' ? {} : { goal: invocation.goal } } })] }
   })
 }

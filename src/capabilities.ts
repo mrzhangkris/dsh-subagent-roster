@@ -1,110 +1,36 @@
 /** Stable, agent-scoped presentation. Business authority stays in the tools. */
 import type { Context } from '@deepseek-ai/cordis'
-import type { Agent } from '@deepseek-ai/dsh-agent'
-import { readdirSync } from 'node:fs'
-import { join } from 'node:path'
-import { readTeamSync, readRetiredMemberIdsSync } from './state.ts'
-import type { TeamState } from './types.ts'
-import { MEMBER_TOOL_NAMES, TEAM_TOOL_NAMES } from './tool-names.ts'
 
-export const TEAM_ACTIVATION_PROMPT = 'SubagentRoster (named subagent roster) provides durable named-subagent delegation. Apply these rules when the user requests it (including /agent-teams) or when continuing an existing roster. Mentioning, quoting, discussing, or declining SubagentRoster alone is not a request to start work.'
-export const TEAM_MEMBER_PROMPT = 'You are an AgentTeams member. Follow your assigned member persona. Use agent_teams_update_task, agent_teams_send_message and agent_teams_status for your own work; mark an assigned task in_progress before working and completed or failed after. Report completion or failure to the captain. Do not create, approve, edit or resume a team. If your durable membership is unavailable, report that to the parent instead of creating a replacement.'
+/**
+ * The model-facing roster usage policy. Static by design: the roster is a
+ * settings-maintained directory, so the policy never rewrites itself, and
+ * core instructions must stay available regardless of roster state. The
+ * per-role directory is a separate dynamic section (`subagent-roster:roster`).
+ */
+export const ROSTER_USAGE_PROMPT = [
+  'SubagentRoster protocol (named subagent roster):',
+  '1. The roster is a named-role directory maintained in settings (设置→插件→子智能体花名册); the dynamic roster section lists the current roles, and roster_list re-reads them on demand. Dispatch roles with roster_agent.',
+  '2. One dispatch = one named role with a self-contained prompt (the role\'s first-turn input). continuable roles are durable: continue them with send_message or wait for their report; one-shot roles answer in the tool result, and run_in_background=true turns them into a background job read with job_output.',
+  '3. The role contract comes from the roster, not from the prompt: identity is icon+name, backgroundMode and model policy are fixed per role. Temporary tasks that fit no named role use the official subagent tools.',
+  '4. Do not busy-poll: reports wake the parent automatically. After a roster change, re-check with roster_list instead of guessing role names.',
+].join('\n')
 
-interface Exposure {
-  member: boolean
-  dispose: () => void
-}
+/** The stable section name under the system-prompt registry. */
+export const ROSTER_USAGE_SECTION_NAME = 'subagent-roster:usage'
 
 interface CapabilityConfig {
-  stateDir: string
-  isPendingMember: (agent: Agent) => boolean
-  captainPrompt: () => string
+  /** Prompt-section order for the usage policy (default `117`). */
   order?: number
 }
 
-function stateRoot(agent: Agent, config: CapabilityConfig): string {
-  return join(agent.session.header.cwd ?? process.cwd(), config.stateDir)
-}
-
-/** Synchronous startup/HMR hydration must finish before the first assembly. */
-function currentTeam(agent: Agent, config: CapabilityConfig): TeamState | undefined {
-  const root = stateRoot(agent, config)
-  let entries
-  try { entries = readdirSync(root, { withFileTypes: true }) } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined
-    throw error
-  }
-  let found: TeamState | undefined
-  for (const entry of entries) {
-    if (!entry.isDirectory() || entry.name === 'archive') continue
-    const team = readTeamSync(root, entry.name)
-    if (team === undefined || (team.captainSessionId !== agent.id
-      && !team.members.some(member => member.id === agent.id))) continue
-    if (found !== undefined) throw new Error('ambiguous AgentTeams membership')
-    found = team
-  }
-  return found
-}
-
-/** Call once, after all business definitions have registered. Never per member. */
-export function installTeamCapabilities(ctx: Context, config: CapabilityConfig): void {
-  const states = new WeakMap<Agent, Exposure>()
-  const active = new Set<Exposure>()
-  let mounted = true
-  // Snapshot policy once: profiles, team state, and tool results must never
-  // rewrite this prefix or control whether core instructions are available.
-  const captainPrompt = `${TEAM_ACTIVATION_PROMPT}\n\n${config.captainPrompt()}`
-
-  function attach(agent: Agent): Exposure {
-    const prior = states.get(agent)
-    if (prior !== undefined) return prior
-    if (!mounted) throw new Error('AgentTeams capability provider is disposed')
-    // Determine a member's role before its first request and retain it for the
-    // lifetime of this scope. Team creation/archive must never rewrite the
-    // captain's system/tools prefix, even after a long ordinary conversation.
-    let member = config.isPendingMember(agent)
-    try {
-      member ||= readRetiredMemberIdsSync(stateRoot(agent, config)).has(agent.id)
-      const team = currentTeam(agent, config)
-      member ||= team !== undefined && team.captainSessionId !== agent.id
-    } catch (error) {
-      // Unrelated damaged state must not disable ordinary conversation.
-      // Business tools still validate durable team state before acting.
-      ctx.logger.warn(`agent-teams: capability hydration failed: ${String(error)}`)
-    }
-    const state: Exposure = { member, dispose: () => undefined }
-    let revoke: (() => void) | undefined
-    let disposed = false
-    let releaseLifetime: (() => void) | undefined
-    state.dispose = () => {
-      if (disposed) return
-      disposed = true
-      revoke?.()
-      releaseLifetime?.()
-      states.delete(agent)
-      active.delete(state)
-    }
-    states.set(agent, state)
-    active.add(state)
-    try {
-      if (member) revoke = agent.ctx.tools.restrict({
-        deny: TEAM_TOOL_NAMES.filter(name => !MEMBER_TOOL_NAMES.includes(name)),
-      })
-      releaseLifetime = agent.ctx.effect(() => state.dispose, 'agent-teams: capability lifetime')
-      return state
-    } catch (error) { state.dispose(); throw error }
-  }
-
+/**
+ * Register the static roster usage section. Plain presentation only: the
+ * section text is fixed at install time, and roster state never rewrites it.
+ */
+export function installRosterCapabilities(ctx: Context, config: CapabilityConfig = {}): void {
   ctx.systemPrompt.section({
-    name: 'agent-teams:usage', order: config.order ?? 117,
-    text: ({ agent }) => {
-      return agent !== undefined && states.get(agent)?.member ? TEAM_MEMBER_PROMPT : captainPrompt
-    },
+    name: ROSTER_USAGE_SECTION_NAME,
+    order: config.order ?? 117,
+    text: () => ROSTER_USAGE_PROMPT,
   })
-  ctx.on('agent/session-start', ({ agent }) => { attach(agent) })
-  ctx.effect(() => () => {
-    mounted = false
-    for (const state of [...active]) state.dispose()
-  }, 'agent-teams: capability scopes')
-  for (const agent of ctx.agents.list()) attach(agent)
 }

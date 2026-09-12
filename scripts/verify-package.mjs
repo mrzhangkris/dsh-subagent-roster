@@ -14,7 +14,7 @@ function check(label, condition, detail = '') {
   console.error(`  FAIL  ${label}${detail ? ` — ${detail}` : ''}`)
 }
 
-console.log('dsh-agent-teams package verification')
+console.log('dsh-subagent-roster package verification')
 
 const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'))
 const patchText = await readFile(new URL('../cordis.patch.yml', import.meta.url), 'utf8')

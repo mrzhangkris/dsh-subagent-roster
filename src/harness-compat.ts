@@ -5,7 +5,8 @@
  * Alpha.2 owns followup/registerContinuableSetup; Alpha.5 and rc.1 own a
  * host-only FIFO queue; 0.1.5 uses a queue/steer deliverer. Both emit
  * synchronous agent/session-start with the explicit Agent. Their public
- * sendMessage instead steers a running Agent and must never carry team jobs.
+ * sendMessage instead steers a running Agent and must never carry plugin
+ * job prompts.
  */
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
@@ -45,7 +46,7 @@ function boundary(runtime: Context['subagents']): RuntimeBoundary {
 }
 
 function unsupported(detail: string): never {
-  throw new Error(`agent-teams: unsupported Harness subagent contract (${detail}); use an explicitly tested Harness version and a coherent dependency installation`)
+  throw new Error(`subagent-roster: unsupported Harness subagent contract (${detail}); use an explicitly tested Harness version and a coherent dependency installation`)
 }
 
 /** Read child-owned history, excluding any descriptor inherited from a parent. */
@@ -86,7 +87,7 @@ export function installContinuableMemberSetup(ctx: Context, setup: Setup): void 
         // session-start is a notification: Harness logs a thrown listener and
         // still admits the first prompt. Reject request assembly explicitly so
         // a malformed saved route cannot silently execute on a default model.
-        const failure = new Error(`agent-teams: member initialization failed: ${String(error)}`, { cause: error })
+        const failure = new Error(`subagent-roster: member initialization failed: ${String(error)}`, { cause: error })
         ctx.logger.warn(failure.message)
         teardown = agent.ctx.on('agent/request', () => { throw failure })
       }
@@ -103,7 +104,7 @@ export function installContinuableMemberSetup(ctx: Context, setup: Setup): void 
       // Listeners contributed to agent.ctx already follow its lifetime. Also
       // release our bookkeeping and remove them if this plugin is reloaded.
       try {
-        agent.ctx.effect(() => dispose, 'agent-teams: child compatibility setup')
+        agent.ctx.effect(() => dispose, 'subagent-roster: child compatibility setup')
       } catch (error) {
         dispose()
         throw error
@@ -113,7 +114,7 @@ export function installContinuableMemberSetup(ctx: Context, setup: Setup): void 
       stop()
       for (const dispose of [...active]) dispose()
     }
-  }, 'agent-teams: member lifecycle compatibility')
+  }, 'subagent-roster: member lifecycle compatibility')
 }
 
 /** Queue a distinct host-authored turn; never substitute model-message steer. */
@@ -122,7 +123,7 @@ export async function queueMemberPrompt(
   content: ContentBlock[], signal: AbortSignal,
 ): Promise<MessageId> {
   const host = boundary(runtime)
-  const source: MessageSource = { kind: 'plugin', plugin: 'dsh-agent-teams' }
+  const source: MessageSource = { kind: 'plugin', plugin: 'dsh-subagent-roster' }
   if (typeof host.followup === 'function') {
     return host.followup.call(runtime, parent, childId, content, { source, signal })
   }
@@ -156,7 +157,7 @@ export function guardSubagentDelivery(
     let active = true
     const check = async (sender: Agent, targetId: SessionId): Promise<void> => {
       if (active && await isRetired(sender, targetId)) {
-        throw new SubagentError(`AgentTeams member "${targetId}" was retired and cannot be resumed`, 'NOT_RESUMABLE')
+        throw new SubagentError(`subagent-roster member "${targetId}" was retired and cannot be resumed`, 'NOT_RESUMABLE')
       }
     }
     const guardedLegacy: Followup = async (parent, childId, content, options) => {
@@ -194,5 +195,5 @@ export function guardSubagentDelivery(
       if (typeof deliver === 'function') restore(hostPromptDeliver, guardedDeliver)
       if (typeof send === 'function') restore('sendMessage', guardedSend)
     }
-  }, 'agent-teams: retired member guard')
+  }, 'subagent-roster: retired member guard')
 }

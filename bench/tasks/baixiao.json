@@ -36,7 +36,7 @@
       "outputs": [
         "memberMaxDepth",
         "maxMembers",
-        "8"
+        "maxMembers: 8"
       ]
     },
     {
@@ -49,8 +49,9 @@
         "implementation",
         "verification",
         "review",
+        "repair",
         "integration",
-        "pass"
+        "verdict=pass"
       ]
     },
     {

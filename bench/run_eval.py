@@ -17,7 +17,7 @@
     /usr/bin/python3 bench/run_eval.py ... --baseline bench/baseline.json
 
 退出码：0 = 评测完成（题目 pass/fail 不影响）；2 = 操作错误（套件非法、
-baseline 缺失/任务集变更失效）；3 = cli 通道未接线（Task 11）。
+baseline 缺失/任务集变更失效/跨通道 adapter-judge-role 不一致）；3 = cli 通道未接线（Task 11）。
 """
 from __future__ import annotations
 
@@ -159,7 +159,34 @@ def load_baseline(path):
         return json.load(handle)
 
 
+def judge_channel_name(judge_choice):
+    """--judge 参数 → baseline 里实写的判官实现名（judge.name）。"""
+    return {"stub": "stub", "api": "kimi"}[judge_choice]
+
+
+def channel_of(baseline):
+    """baseline 的通道三元组（adapter, judge, role）。"""
+    return (baseline.get("adapter"), baseline.get("judge"), baseline.get("role"))
+
+
+def assert_same_channel(baseline, adapter, judge, role):
+    """跨通道防护：adapter/judge/role 任一与 baseline 不同即拒绝对比。
+
+    基准数字只在同通道下可比——stub 与真判官、不同角色配置的分数混比没有
+    意义；换通道必须重新 --freeze 冻结 baseline。
+    """
+    current = (adapter, judge, role)
+    if channel_of(baseline) != current:
+        fail(
+            "baseline 通道不一致，拒绝对比（跨通道防护）：baseline adapter=%s judge=%s role=%s"
+            " ↔ 当前 adapter=%s judge=%s role=%s\n"
+            "基准数字只在同通道（adapter/judge/role 完全一致）下可比；换通道请重新 --freeze 冻结 baseline。"
+            % (baseline.get("adapter"), baseline.get("judge"), baseline.get("role"), current[0], current[1], current[2])
+        )
+
+
 def compare(baseline, suite_name, tasks, rows, summary):
+    assert_same_channel(baseline, summary["adapter"], summary["judge"], summary["role"])
     if baseline.get("suite") != suite_name or baseline.get("suite_hash") != suite_hash(tasks):
         fail(
             "baseline 失效：任务集已变更（suite_hash 不一致）。baseline=%s current=%s\n"
@@ -226,10 +253,11 @@ def main(argv=None):
     tasks = suite["tasks"]
     role, role_name = load_role(args.role)
 
-    # 对比模式先验 suite_hash 再跑卷：真机一卷是真金白银的 LLM 调用，不白跑。
+    # 对比模式先验 suite_hash 与通道再跑卷：真机一卷是真金白银的 LLM 调用，不白跑。
     pending_baseline = None
     if args.baseline and not args.freeze:
         pending_baseline = load_baseline(args.baseline)
+        assert_same_channel(pending_baseline, args.adapter, judge_channel_name(args.judge), role_name)
         if pending_baseline.get("suite") != suite["suite"] or pending_baseline.get("suite_hash") != suite_hash(tasks):
             fail(
                 "baseline 失效：任务集已变更（suite_hash 不一致）。baseline=%s current=%s\n"

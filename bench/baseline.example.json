@@ -1,24 +1,36 @@
 {
-  "_comment": "baseline.json 格式示例（占位值，非真实基准线）。Task 11 首跑后执行 run_eval --baseline bench/baseline.json --freeze 生成真实 baseline 并冻结；suite_hash 对应当刻任务集，任务集任何变更都会使 baseline 失效（对比模式会拒绝并要求重冻）。",
+  "_comment": "baseline.json 格式示例（占位值，非真实基准线）。Task 11 首跑后执行 run_eval --baseline bench/baseline.json --freeze 生成真实 baseline 并冻结；suite_hash 对应当刻任务集，任务集任何变更都会使 baseline 失效（对比模式会拒绝并要求重冻）。 judge 字段记录的是判官实现名（freeze 实写 judge.name）：stub 或 kimi。",
   "schema_version": 1,
   "suite": "baixiao",
   "suite_hash": "<sha256(canonical-json(tasks)) 首跑时自动计算>",
   "created_at": "2026-09-12T09:00:00+08:00",
   "role": "default",
   "adapter": "cli",
-  "judge": "api",
+  "judge": "kimi",
   "summary": {
     "adapter": "cli",
-    "judge": "api",
+    "judge": "kimi",
     "total": 8,
     "passed_overall": 0,
     "passed_programmatic": 0,
     "pass_at_1": 0.0,
     "judge_unavailable": 0,
     "by_difficulty": {
-      "easy": { "total": 4, "passed_overall": 0, "pass_rate": 0.0 },
-      "medium": { "total": 2, "passed_overall": 0, "pass_rate": 0.0 },
-      "hard": { "total": 2, "passed_overall": 0, "pass_rate": 0.0 }
+      "easy": {
+        "total": 4,
+        "passed_overall": 0,
+        "pass_rate": 0.0
+      },
+      "medium": {
+        "total": 2,
+        "passed_overall": 0,
+        "pass_rate": 0.0
+      },
+      "hard": {
+        "total": 2,
+        "passed_overall": 0,
+        "pass_rate": 0.0
+      }
     },
     "tokens_in": 0,
     "tokens_out": 0,

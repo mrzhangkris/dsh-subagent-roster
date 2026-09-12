@@ -6,9 +6,9 @@
  * inject a mock), so the whole link stays unit-testable against the exact
  * field contract below.
  *
- * The request shape mirrors the fork's own `spawnMember` call surface
- * (`members.ts`) and the host `ContinuableStartSpec`: the per-member knobs
- * ride inside `request`, the initial prompt is a `ContentBlock[]`
+ * The request shape mirrors the fork's own member-spawn call surface and
+ * the host `ContinuableStartSpec`: the per-member knobs ride inside
+ * `request`, the initial prompt is a `ContentBlock[]`
  * (`[{ type: 'text', text }]`, not a bare string), and the top level carries
  * only `provider`/`label`/`request`/`signal`.
  *
