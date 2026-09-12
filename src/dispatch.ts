@@ -171,8 +171,10 @@ export async function dispatchContinuable(
   if (args.transport !== 'spawn' && args.transport !== 'fork') {
     throw new Error(`roster dispatch: invalid transport ${JSON.stringify(String(args.transport))} — expected "spawn" or "fork"`)
   }
-  const { startContinuable } = deps.subagents as SubagentsLike
-  const start = await startContinuable({
+  const subagents = deps.subagents as SubagentsLike
+  // Receiver-bound call: destructuring loses `this`, and the host service
+  // reads `this.requireContinuations()` internally (live-fire bug 2026-09-11).
+  const start = await subagents.startContinuable({
     provider: args.transport,
     label: args.spec.label,
     request: {
@@ -308,8 +310,9 @@ export async function dispatchOneShotForeground(
   deps: OneShotDeps, args: OneShotArgs,
 ): Promise<OneShotForegroundResult> {
   assertDispatchable(args)
-  const { start } = deps.subagents as SubagentsLike
-  const run = await start({
+  const subagents = deps.subagents as SubagentsLike
+  // Receiver-bound call (see dispatchContinuable note) — destructuring drops `this`.
+  const run = await subagents.start({
     ...buildRequest(args.agent, args.transport, args.spec, args.prompt),
     ...(args.signal === undefined ? {} : { signal: args.signal }),
   })
@@ -391,7 +394,7 @@ export function dispatchOneShotBackground(
   if (jobs === undefined) {
     throw new Error('roster dispatch: background jobs unavailable — load the host jobs service (deps.jobs)')
   }
-  const { start } = deps.subagents as SubagentsLike
+  const subagents = deps.subagents as SubagentsLike
   const id = jobs.start({
     kind: 'subagent',
     label: args.spec.label,
@@ -404,7 +407,7 @@ export function dispatchOneShotBackground(
           controller.abort(args.signal!.reason ?? 'background subagent task killed')
         }, { once: true })
       }
-      const startPromise = start({
+      const startPromise = subagents.start({
         ...buildRequest(args.agent, args.transport, args.spec, args.prompt),
         signal: controller.signal,
       })

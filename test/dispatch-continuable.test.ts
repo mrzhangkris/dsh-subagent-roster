@@ -159,3 +159,39 @@ describe('dispatchContinuable — transport validity (contract 5)', () => {
     expect(subagents.startContinuable).not.toHaveBeenCalled()
   })
 })
+
+// Live-fire regression (2026-09-11): the host service reads
+// `this.requireContinuations()` internally. A destructured call
+// (`const { startContinuable } = subagents; startContinuable(...)`) drops
+// `this` and throws exactly this TypeError on the real host. The mock below
+// is `this`-sensitive like the real service, so a destructured call fails the
+// test — plain arrow mocks cannot catch this class of bug.
+describe('receiver binding (live-fire regression)', () => {
+  it('calls startContinuable with the host service as receiver', async () => {
+    const hostLike = {
+      __tag: 'host-subagents',
+      startContinuable(this: { __tag?: string }, _spec: unknown) {
+        if (!this || this.__tag !== 'host-subagents') {
+          throw new TypeError("Cannot read properties of undefined (reading 'requireContinuations')")
+        }
+        return Promise.resolve({ childId: 'child-this', messageId: 'msg-this' })
+      },
+    }
+    const result = await dispatchContinuable({ subagents: hostLike }, baseArgs())
+    expect(result).toEqual({ childId: 'child-this', messageId: 'msg-this' })
+  })
+
+  it('and the destructured form really does throw (test validity check)', async () => {
+    const hostLike = {
+      __tag: 'host-subagents',
+      startContinuable(this: { __tag?: string }, _spec: unknown) {
+        if (!this || this.__tag !== 'host-subagents') {
+          throw new TypeError("Cannot read properties of undefined (reading 'requireContinuations')")
+        }
+        return Promise.resolve({ childId: 'x', messageId: 'y' })
+      },
+    }
+    const { startContinuable } = hostLike
+    expect(() => startContinuable.call(undefined, {} as never)).toThrow(/requireContinuations/)
+  })
+})
