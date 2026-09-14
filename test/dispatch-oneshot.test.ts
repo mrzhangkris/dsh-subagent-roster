@@ -6,9 +6,11 @@
  * `jobs.start`):
  *
  * Foreground (`dispatchOneShotForeground`):
- * 1. start request construction is isomorphic with Task 5's continuable link
- *    (provider/label/persona/agentOptions/toolFilter/maxDepth/ContentBlock
- *    prompt/transport validation/parent defense)
+ * 1. the host `start(name, request)` two-arg seam: the provider NAME string
+ *    goes first, the request bundle second — with `label` riding INSIDE the
+ *    bundle (unlike the continuable top-level spec), plus isomorphic
+ *    persona/agentOptions/toolFilter/maxDepth/ContentBlock prompt/transport
+ *    validation/parent defense
  * 2. result+dispose allSettled pairing: both settle → ok; dispose rejects
  *    while the result succeeds → the result is not swallowed (dispose error
  *    surfaces in the failure detail tail); result and dispose both fail →
@@ -105,23 +107,32 @@ function firstCall(mock: ReturnType<typeof vi.fn>): any {
   return call[0]
 }
 
+/** Second captured argument of a mock fn (the host `start(name, request)` request bundle). */
+function secondArg(mock: ReturnType<typeof vi.fn>): any {
+  const call = mock.mock.calls[0]
+  if (call === undefined) throw new Error('mock was never called')
+  return call[1]
+}
+
 describe('dispatchOneShotForeground — request construction (contract 1)', () => {
-  it('builds the nested start request exactly like the continuable link', async () => {
+  it('splits the host start(name, request) seam: provider name first, request bundle second', async () => {
     const subagents = mockSubagents()
     await dispatchOneShotForeground(
       { subagents } as unknown as OneShotDeps,
       baseArgs({ prompt: 'hello world', transport: 'fork' }),
     )
-    const spec = firstCall(subagents.start)
-    expect(spec).toEqual({
-      provider: 'fork',
+    // Live-fire regression (2026-09-12): the host signature is
+    // `start(name, request)` — TWO positional arguments. Passing the whole
+    // spec object as one argument lands it in `providers.get("[object
+    // Object]")` → SubagentError "no subagent provider registered". Unlike
+    // the continuable spec, `label` rides INSIDE the request bundle.
+    expect(firstCall(subagents.start)).toBe('fork')
+    expect(secondArg(subagents.start)).toEqual({
       label: '📚 百晓',
-      request: {
-        prompt: [{ type: 'text', text: 'hello world' }],
-        parent: { id: 'parent-1' },
-        persona: 'You are 百晓, a scout.',
-        maxDepth: 3,
-      },
+      prompt: [{ type: 'text', text: 'hello world' }],
+      parent: { id: 'parent-1' },
+      persona: 'You are 百晓, a scout.',
+      maxDepth: 3,
     })
   })
 
@@ -131,14 +142,14 @@ describe('dispatchOneShotForeground — request construction (contract 1)', () =
       { subagents } as unknown as OneShotDeps,
       baseArgs({ spec: baseSpec({ agentOptions: { model: 'm1' } as any, toolFilter: ['read'] }) }),
     )
-    const spec = firstCall(subagents.start)
-    expect(spec.request.agentOptions).toEqual({ model: 'm1' })
-    expect(spec.request.toolFilter).toEqual(['read'])
+    const request = secondArg(subagents.start)
+    expect(request.agentOptions).toEqual({ model: 'm1' })
+    expect(request.toolFilter).toEqual(['read'])
 
     const subagents2 = mockSubagents()
     await dispatchOneShotForeground({ subagents: subagents2 } as unknown as OneShotDeps, baseArgs())
-    expect('agentOptions' in firstCall(subagents2.start).request).toBe(false)
-    expect('toolFilter' in firstCall(subagents2.start).request).toBe(false)
+    expect('agentOptions' in secondArg(subagents2.start)).toBe(false)
+    expect('toolFilter' in secondArg(subagents2.start)).toBe(false)
   })
 
   it('throws on a missing parent before issuing any request', async () => {
@@ -170,7 +181,7 @@ describe('dispatchOneShotForeground — request construction (contract 1)', () =
       { subagents } as unknown as OneShotDeps,
       baseArgs({ signal: controller.signal }),
     )
-    expect(firstCall(subagents.start).signal).toBe(controller.signal)
+    expect(secondArg(subagents.start).signal).toBe(controller.signal)
   })
 })
 
@@ -364,10 +375,10 @@ describe('dispatchOneShotBackground — task-owned AbortController (contract 7)'
   it('hands the controller signal (not args.signal) to start and forwards aborts', async () => {
     const captured: AbortSignal[] = []
     const subagents = {
-      start: vi.fn((spec: any) => {
-        captured.push(spec.signal)
+      start: vi.fn((_name: any, request: any) => {
+        captured.push(request.signal)
         // Simulate a provider whose STARTUP rejects when its signal aborts.
-        const signal = spec.signal as AbortSignal
+        const signal = request.signal as AbortSignal
         return new Promise((_resolve, reject) => {
           signal.addEventListener('abort', () => { reject(new Error('provider aborted mid-start')) }, { once: true })
         })
@@ -401,8 +412,8 @@ describe('dispatchOneShotBackground — abort mapping (contract 8)', () => {
     const jobs = mockJobs()
     // Startup rejects because the signal aborted mid-start.
     const subagents = {
-      start: vi.fn((spec: any) => {
-        const signal = spec.signal as AbortSignal
+      start: vi.fn((_name: any, request: any) => {
+        const signal = request.signal as AbortSignal
         return new Promise((_resolve, reject) => {
           signal.addEventListener('abort', () => { reject(new Error('startup aborted')) }, { once: true })
         })

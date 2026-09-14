@@ -243,7 +243,8 @@ describe('roster_agent — one-shot foreground', () => {
     const value = await dispatch.execute({ agent: '风清', prompt: '润色这段' }, execOf(PARENT)) as Record<string, unknown>
     const start = (subagents as { start: ReturnType<typeof vi.fn> }).start
     expect(start).toHaveBeenCalledTimes(1)
-    expect(start.mock.calls[0]![0].label).toBe('风清') // no icon → bare name label
+    expect(start.mock.calls[0]![0]).toBe('spawn') // host start(name, request): provider NAME first
+    expect(start.mock.calls[0]![1].label).toBe('风清') // no icon → bare name label (request bundle)
     const run = await start.mock.results[0]!.value as unknown as { dispose: ReturnType<typeof vi.fn> }
     expect(run.dispose).toHaveBeenCalledTimes(1)
     expect(jobs.start).not.toHaveBeenCalled()

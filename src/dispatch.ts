@@ -83,21 +83,21 @@ interface SubagentsLike {
     signal?: AbortSignal
   }): Promise<{ childId: string; messageId: string }>
   /**
-   * The one-shot start seam: `provider` routes to the provider family, the
-   * rest of the request rides as the second bundle. Mirrors the continuable
-   * call shape so tests inject the same nested request.
+   * The one-shot start seam. The host signature is `start(name, request)` —
+   * TWO positional arguments (live-fire 2026-09-12: a single spec-object
+   * argument lands in `providers.get("[object Object]")` and fails with
+   * 「no subagent provider registered」). `name` routes to the provider
+   * family; the request bundle carries label+prompt+parent+persona+…, with
+   * `label` riding INSIDE the bundle (unlike the continuable top-level spec).
    */
-  start(spec: {
-    provider: string
+  start(name: string, request: {
     label: string
-    request: {
-      prompt: { type: 'text'; text: string }[]
-      parent: unknown
-      persona: string
-      agentOptions?: DispatchSpec['agentOptions']
-      toolFilter?: DispatchSpec['toolFilter']
-      maxDepth?: number
-    }
+    prompt: { type: 'text'; text: string }[]
+    parent: unknown
+    persona: string
+    agentOptions?: DispatchSpec['agentOptions']
+    toolFilter?: DispatchSpec['toolFilter']
+    maxDepth?: number
     signal?: AbortSignal
   }): Promise<SubagentRunLike>
 }
@@ -228,14 +228,14 @@ function formatError(error: unknown): string {
   return String(error)
 }
 
-/** Shared start-request construction (kept isomorphic across the three links). */
-function buildRequest(
+/** Shared one-shot start construction: the host `start(name, request)` pair. */
+function buildStart(
   agent: unknown, transport: 'spawn' | 'fork', spec: DispatchSpec, prompt: string,
-): { provider: string; label: string; request: Parameters<SubagentsLike['start']>[0]['request'] } {
+): { name: string; request: Parameters<SubagentsLike['start']>[1] } {
   return {
-    provider: transport,
-    label: spec.label,
+    name: transport,
     request: {
+      label: spec.label,
       prompt: [{ type: 'text', text: prompt }],
       parent: agent,
       persona: spec.persona,
@@ -311,9 +311,12 @@ export async function dispatchOneShotForeground(
 ): Promise<OneShotForegroundResult> {
   assertDispatchable(args)
   const subagents = deps.subagents as SubagentsLike
-  // Receiver-bound call (see dispatchContinuable note) — destructuring drops `this`.
-  const run = await subagents.start({
-    ...buildRequest(args.agent, args.transport, args.spec, args.prompt),
+  // Two-arg host seam `start(name, request)` (see SubagentsLike.start note) —
+  // the 2026-09-12 live-fire failure passed the whole spec as one argument.
+  // Receiver-bound: destructuring drops `this` (see dispatchContinuable note).
+  const built = buildStart(args.agent, args.transport, args.spec, args.prompt)
+  const run = await subagents.start(built.name, {
+    ...built.request,
     ...(args.signal === undefined ? {} : { signal: args.signal }),
   })
 
@@ -407,8 +410,9 @@ export function dispatchOneShotBackground(
           controller.abort(args.signal!.reason ?? 'background subagent task killed')
         }, { once: true })
       }
-      const startPromise = subagents.start({
-        ...buildRequest(args.agent, args.transport, args.spec, args.prompt),
+      const built = buildStart(args.agent, args.transport, args.spec, args.prompt)
+      const startPromise = subagents.start(built.name, {
+        ...built.request,
         signal: controller.signal,
       })
       return {
