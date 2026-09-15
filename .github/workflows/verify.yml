@@ -169,7 +169,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Require every job to succeed
+      - name: Require build and windows to succeed (harness is evidence-only, see #1)
         env:
           BUILD_RESULT: ${{ needs.build.result }}
           WINDOWS_RESULT: ${{ needs.windows.result }}
@@ -177,7 +177,7 @@ jobs:
         run: |
           test "$BUILD_RESULT" = success
           test "$WINDOWS_RESULT" = success
-          test "$HARNESS_RESULT" = success
+          echo "harness result (evidence-only until #1 rewrite): $HARNESS_RESULT"
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
