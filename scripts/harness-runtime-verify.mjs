@@ -111,7 +111,7 @@ if (flags.has('--artifact')) {
     artifactSha = hash(artifact);
     const ownArtifact = join(report, 'artifact-' + artifactSha + '.tgz');
     copyFileSync(artifact, ownArtifact);
-    manifest.dependencies['@nanmicoder/dsh-agent-teams'] = 'file:' + ownArtifact;
+    manifest.dependencies['@mrzhangkris/dsh-subagent-roster'] = 'file:' + ownArtifact;
 }
 else if (!flags.has('--prepare-only'))
     throw Error('--artifact required unless --prepare-only');
@@ -125,16 +125,16 @@ if (flags.has('--prepare-only')) {
     console.log('Prepared ' + version + ' with ' + cohort.count + ' exact DSH packages');
     process.exit(0);
 }
-const plugin = JSON.parse(readFileSync(join(runtime, 'node_modules/@nanmicoder/dsh-agent-teams/package.json'), 'utf8'));
-if (plugin.name !== '@nanmicoder/dsh-agent-teams') throw Error('Artifact package identity does not match AgentTeams');
+const plugin = JSON.parse(readFileSync(join(runtime, 'node_modules/@mrzhangkris/dsh-subagent-roster/package.json'), 'utf8'));
+if (plugin.name !== '@mrzhangkris/dsh-subagent-roster') throw Error('Artifact package identity does not match AgentTeams');
 const runs = [];
 for (const scenario of (flags.has('--scenario') ? [flags.get('--scenario')] : scenarios)) {
     const home = join(report, scenario, 'home'), profile = join(home, 'profiles', 'headless'), workspace = join(report, scenario, 'workspace');
     mkdirSync(profile, { recursive: true });
     mkdirSync(workspace, { recursive: true });
-    mkdirSync(join(profile, 'node_modules/@nanmicoder'), { recursive: true });
-    symlinkSync(join(runtime, 'node_modules/@nanmicoder/dsh-agent-teams'), join(profile, 'node_modules/@nanmicoder/dsh-agent-teams'), 'dir');
-    json(join(profile, 'package.json'), { name: 'runtime-test-profile', version: '0.0.0', private: true, type: 'module', dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-headless', '@nanmicoder/dsh-agent-teams'], patchReload: 'startup' } } });
+    mkdirSync(join(profile, 'node_modules/@mrzhangkris'), { recursive: true });
+    symlinkSync(join(runtime, 'node_modules/@mrzhangkris/dsh-subagent-roster'), join(profile, 'node_modules/@mrzhangkris/dsh-subagent-roster'), 'dir');
+    json(join(profile, 'package.json'), { name: 'runtime-test-profile', version: '0.0.0', private: true, type: 'module', dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-headless', '@mrzhangkris/dsh-subagent-roster'], patchReload: 'startup' } } });
     copyFileSync(join(dirname(fileURLToPath(import.meta.url)), 'fixtures/harness-runtime-llm.mjs'), join(profile, 'fixture-llm.mjs'));
     writeFileSync(join(profile, 'cordis.patch.yml'), `- id: llm-deepseek\n  disabled: true\n- id: llm-pi-ai\n  disabled: true\n- id: agent-default-model\n  config:\n    provider: runtime-lab\n    model: fixture-model\n- insert:\n    - id: runtime-lab-fixture\n      name: './fixture-llm.mjs'\n`);
     if (scenario === 'fallback')
